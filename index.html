@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://fonts.googleapis.com/css2?family=Cairo&family=Roboto&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Amiri&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
       <link rel="icon" type="image/x-icon" href="img//icon1.jpg">
 
   <style>
@@ -2480,15 +2480,35 @@
     </div>
   </footer>
 
-<script>
+<script type="module">
+    // ====== استيراد Firebase ======
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
+    import { getAuth, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-auth.js";
+    import { getDatabase, ref, get, set, push, onValue, query, orderByChild, equalTo } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-database.js";
+
+    // ====== تهيئة Firebase ======
+    const firebaseConfig = {
+        apiKey: "AIzaSyBlcKC2ncX9mTOPlhDOnfmyzdJ5mLinWYY",
+        authDomain: "al-fajr-digital-library.firebaseapp.com",
+        databaseURL: "https://al-fajr-digital-library-default-rtdb.firebaseio.com",
+        projectId: "al-fajr-digital-library",
+        storageBucket: "al-fajr-digital-library.firebasestorage.app",
+        messagingSenderId: "739899495618",
+        appId: "1:739899495618:web:8e60409193ec1408b4d75b"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const database = getDatabase(app);
+
     // ====== البيانات والتكوين ======
     let currentLanguage = 'ar';
     let currentTheme = 'dark';
-    let displayMode = 'random'; // random, rating, newest
+    let displayMode = 'random';
     let cartCount = 0;
     let currentMangaPage = 0;
     const mangaItemsPerPage = 4;
-    let currentProductId = null; // لتخزين معرف المنتج الحالي
+    let currentProductId = null;
     
     // إعدادات التقسيم
     const novelsPerPage = 6;
@@ -2509,11 +2529,29 @@
       'adventure': { current: 0, total: 0, items: [] }
     };
 
+    // جميع المنتجات
+    let allProducts = [];
+
+    // ====== دالة مساعدة للحصول على الصورة ======
+    function getProductImage(product) {
+        // إعطاء الأولوية لـ Base64
+        if (product.imageBase64) {
+            return product.imageBase64;
+        }
+        // ثم الرابط
+        else if (product.image) {
+            return product.image;
+        }
+        // ثم صورة افتراضية
+        else {
+            return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICAgIDxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjMzMzMzMzIi8+CiAgICA8dGV4dCB4PSIyMDAiIHk9IjE1MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgdGV4dC1kb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIj5ObyBJbWFnZTwvdGV4dD4KPC9zdmc+';
+        }
+    }
+
     // ====== التحقق من تسجيل الدخول ======
     function checkAuth() {
       const user = JSON.parse(localStorage.getItem('user') || 'null');
       if (!user || !user.uid) {
-        // إذا لم يكن المستخدم مسجل الدخول، قم بتوجيهه
         window.location.href = 'login.html';
         return null;
       }
@@ -2521,29 +2559,24 @@
     }
 
     // ====== دالة لتسجيل الخروج ======
-    function logout() {
-      if (window.firebaseAuth) {
-        window.firebase.signOut(window.firebaseAuth)
-          .then(() => {
-            localStorage.removeItem('user');
-            localStorage.removeItem('cart');
-            showNotification(currentLanguage === 'ar' ? 
-              'تم تسجيل الخروج بنجاح' : 
-              'Logged out successfully');
-            setTimeout(() => {
-              window.location.href = 'login.html';
-            }, 1500);
-          })
-          .catch(error => {
-            console.error('Error logging out:', error);
-            showNotification(currentLanguage === 'ar' ? 
-              'حدث خطأ أثناء تسجيل الخروج' : 
-              'Error logging out');
-          });
-      } else {
+    async function logout() {
+      try {
+        await signOut(auth);
+        
         localStorage.removeItem('user');
         localStorage.removeItem('cart');
-        window.location.href = 'login.html';
+        showNotification(currentLanguage === 'ar' ? 
+          'تم تسجيل الخروج بنجاح' : 
+          'Logged out successfully');
+        
+        setTimeout(() => {
+          window.location.href = 'login.html';
+        }, 1500);
+      } catch (error) {
+        console.error('Error logging out:', error);
+        showNotification(currentLanguage === 'ar' ? 
+          'حدث خطأ أثناء تسجيل الخروج' : 
+          'Error logging out');
       }
     }
 
@@ -2571,1999 +2604,2212 @@
       return user;
     }
 
-    // بيانات المنتجات الكاملة مع التفاصيل
-    const allProducts = [
-      {
-        id: 'story1',
-        title: 'النبات الأحمر',
-        titleEn: 'The Red Plant',
-        category: 'قصص',
-        categoryEn: 'Stories',
-        subcategory: 'ضحك، تفاهة',
-        subcategoryEn: 'Comedy, Triviality',
-        price: '$9.99',
-        description: 'قصة ممتعة تحكي مغامرات نبات أحمر في عالم غريب. تتعمق القصة في شخصية النبات الأحمر وكيف يتعامل مع التحديات اليومية في عالم غريب مليء بالمفاجآت.',
-        descriptionEn: 'A fun story about the adventures of a red plant in a strange world. The story delves into the character of the red plant and how it deals with daily challenges in a strange world full of surprises.',
-        image: 'https://via.placeholder.com/400x300/FF6B35/FFFFFF?text=النبات+الأحمر',
-        rating: 4.2,
-        type: 'قصة',
-        typeEn: 'Story',
-        format: 'رقمي',
-        formatEn: 'Digital',
-        ratingCategory: 'all',
-        chapters: [],
-        comments: []
-      },
-      {
-        id: 'story2',
-        title: 'مغامرات في الغابة',
-        titleEn: 'Adventures in the Forest',
-        category: 'قصص',
-        categoryEn: 'Stories',
-        subcategory: 'مغامرة، خيال',
-        subcategoryEn: 'Adventure, Fantasy',
-        price: '$12.99',
-        description: 'مغامرات مثيرة في أعماق الغابات السحرية حيث تكتشف الشخصيات أسراراً قديمة وتواجه مخلوقات غريبة.',
-        descriptionEn: 'Exciting adventures in the depths of magical forests where characters discover ancient secrets and face strange creatures.',
-        image: 'https://via.placeholder.com/400x300/4285F4/FFFFFF?text=مغامرات+في+الغابة',
-        rating: 4.5,
-        type: 'قصة',
-        typeEn: 'Story',
-        format: 'رقمي',
-        formatEn: 'Digital',
-        ratingCategory: 'all',
-        chapters: [],
-        comments: []
-      },
-      {
-        id: 'story3',
-        title: 'أسرار المدينة',
-        titleEn: 'Secrets of the City',
-        category: 'قصص',
-        categoryEn: 'Stories',
-        subcategory: 'غموض، إثارة',
-        subcategoryEn: 'Mystery, Thriller',
-        price: '$14.99',
-        description: 'حل الألغاز واكتشاف أسرار المدينة القديمة في رحلة مليئة بالإثارة والتشويق.',
-        descriptionEn: 'Solve puzzles and discover the secrets of the ancient city in a journey full of excitement and suspense.',
-        image: 'https://via.placeholder.com/400x300/FFAB00/000000?text=أسرار+المدينة',
-        rating: 4.7,
-        type: 'قصة',
-        typeEn: 'Story',
-        format: 'رقمي',
-        formatEn: 'Digital',
-        ratingCategory: 'all',
-        chapters: [],
-        comments: []
-      },
-      {
-        id: 'story4',
-        title: 'رحلة إلى النجوم',
-        titleEn: 'Journey to the Stars',
-        category: 'قصص',
-        categoryEn: 'Stories',
-        subcategory: 'خيال علمي',
-        subcategoryEn: 'Science Fiction',
-        price: '$16.99',
-        description: 'رحلة فضائية لاكتشاف أسرار الكون ومواجهة تحديات الفضاء البعيد.',
-        descriptionEn: 'A space journey to discover the secrets of the universe and face the challenges of deep space.',
-        image: 'https://via.placeholder.com/400x300/1A73E8/FFFFFF?text=رحلة+إلى+النجوم',
-        rating: 4.8,
-        type: 'قصة',
-        typeEn: 'Story',
-        format: 'رقمي',
-        formatEn: 'Digital',
-        ratingCategory: 'all',
-        chapters: [],
-        comments: []
-      },
-      // مانجا
-      {
-        id: 'manga1',
-        title: 'مانجا الفانتازيا 1',
-        titleEn: 'Fantasy Manga 1',
-        category: 'مانجا',
-        categoryEn: 'Manga',
-        subcategory: 'خيال سحري',
-        subcategoryEn: 'Magic Fantasy',
-        price: '$8.99',
-        description: 'مانجا فانتازيا سحرية مليئة بالمغامرات والشخصيات المثيرة.',
-        descriptionEn: 'Magical fantasy manga full of adventures and exciting characters.',
-        image: 'https://via.placeholder.com/400x300/FF6B35/FFFFFF?text=مانجا+1',
-        rating: 4.3,
-        type: 'مانجا',
-        typeEn: 'Manga',
-        format: 'رقمي',
-        formatEn: 'Digital',
-        ratingCategory: 'all',
-        chapters: [],
-        comments: []
-      },
-      {
-        id: 'manga2',
-        title: 'مانجا الفانتازيا 2',
-        titleEn: 'Fantasy Manga 2',
-        category: 'مانجا',
-        categoryEn: 'Manga',
-        subcategory: 'خيال سحري',
-        subcategoryEn: 'Magic Fantasy',
-        price: '$8.99',
-        description: 'استمرار مغامرات مانجا الفانتازيا مع شخصيات جديدة وأحداث مثيرة.',
-        descriptionEn: 'Continuation of fantasy manga adventures with new characters and exciting events.',
-        image: 'https://via.placeholder.com/400x300/4285F4/FFFFFF?text=مانجا+2',
-        rating: 4.4,
-        type: 'مانجا',
-        typeEn: 'Manga',
-        format: 'رقمي',
-        formatEn: 'Digital',
-        ratingCategory: 'all',
-        chapters: [],
-        comments: []
-      },
-      {
-        id: 'manga3',
-        title: 'مانجا الفانتازيا 3',
-        titleEn: 'Fantasy Manga 3',
-        category: 'مانجا',
-        categoryEn: 'Manga',
-        subcategory: 'خيال سحري',
-        subcategoryEn: 'Magic Fantasy',
-        price: '$8.99',
-        description: 'فصل جديد من مغامرات مانجا الفانتازيا.',
-        descriptionEn: 'New chapter of fantasy manga adventures.',
-        image: 'https://via.placeholder.com/400x300/FFAB00/000000?text=مانجا+3',
-        rating: 4.6,
-        type: 'مانجا',
-        typeEn: 'Manga',
-        format: 'رقمي',
-        formatEn: 'Digital',
-        ratingCategory: 'all',
-        chapters: [],
-        comments: []
-      },
-      {
-        id: 'manga4',
-        title: 'مانجا الفانتازيا 4',
-        titleEn: 'Fantasy Manga 4',
-        category: 'مانجا',
-        categoryEn: 'Manga',
-        subcategory: 'خيال سحري',
-        subcategoryEn: 'Magic Fantasy',
-        price: '$8.99',
-        description: 'نهاية ملحمية لسلسلة مانجا الفانتازيا.',
-        descriptionEn: 'Epic ending to the fantasy manga series.',
-        image: 'https://via.placeholder.com/400x300/1A73E8/FFFFFF?text=مانجا+4',
-        rating: 4.8,
-        type: 'مانجا',
-        typeEn: 'Manga',
-        format: 'رقمي',
-        formatEn: 'Digital',
-        ratingCategory: 'all',
-        chapters: [],
-        comments: []
-      },
-      // فيديوهات - خيال سحري
-      {
-        id: 'fantasy1',
-        title: 'أساطير السحر القديم',
-        titleEn: 'Legends of Ancient Magic',
-        category: 'فيديوهات',
-        categoryEn: 'Videos',
-        subcategory: 'الخيال السحري',
-        subcategoryEn: 'Magic Fantasy',
-        price: '$24.99',
-        description: 'رحلة سحرية إلى عالم الأساطير القديمة حيث السحر حقيقة والخرافات تتحول إلى واقع.',
-        descriptionEn: 'A magical journey to the world of ancient legends where magic is real and myths become reality.',
-        image: 'https://via.placeholder.com/400x300/FF6B35/FFFFFF?text=فانتازيا+1',
-        rating: 4.5,
-        type: 'فيديو',
-        typeEn: 'Video',
-        format: 'رقمي',
-        formatEn: 'Digital',
-        ratingCategory: 'all',
-        chapters: [
-          { title: 'الفصل الأول: البداية', duration: '25:45', id: 'ch1' },
-          { title: 'الفصل الثاني: الاكتشاف', duration: '28:30', id: 'ch2' },
-          { title: 'الفصل الثالث: المواجهة', duration: '32:15', id: 'ch3' }
-        ],
-        comments: []
-      },
-      {
-        id: 'fantasy2',
-        title: 'عالم الجنيات',
-        titleEn: 'World of Fairies',
-        category: 'فيديوهات',
-        categoryEn: 'Videos',
-        subcategory: 'الخيال السحري',
-        subcategoryEn: 'Magic Fantasy',
-        price: '$19.99',
-        description: 'مغامرة في عالم الجنيات السحري حيث الجمال والسحر يتحدان لخلق قصة لا تنسى.',
-        descriptionEn: 'An adventure in the magical world of fairies where beauty and magic combine to create an unforgettable story.',
-        image: 'https://via.placeholder.com/400x300/4285F4/FFFFFF?text=فانتازيا+2',
-        rating: 4.2,
-        type: 'فيديو',
-        typeEn: 'Video',
-        format: 'رقمي',
-        formatEn: 'Digital',
-        ratingCategory: 'all',
-        chapters: [
-          { title: 'الفصل الأول: المدخل السحري', duration: '32:15', id: 'ch1' },
-          { title: 'الفصل الثاني: لقاء الملكة', duration: '28:45', id: 'ch2' }
-        ],
-        comments: []
-      },
-      {
-        id: 'fantasy3',
-        title: 'سحر الشرق',
-        titleEn: 'Eastern Magic',
-        category: 'فيديوهات',
-        categoryEn: 'Videos',
-        subcategory: 'الخيال السحري',
-        subcategoryEn: 'Magic Fantasy',
-        price: '$22.99',
-        description: 'استكشاف عالم السحر الشرقي بكل أسراره وأساطيره الرائعة.',
-        descriptionEn: 'Exploring the world of Eastern magic with all its secrets and wonderful legends.',
-        image: 'https://via.placeholder.com/400x300/FFAB00/000000?text=فانتازيا+3',
-        rating: 4.6,
-        type: 'فيديو',
-        typeEn: 'Video',
-        format: 'رقمي',
-        formatEn: 'Digital',
-        ratingCategory: 'all',
-        chapters: [
-          { title: 'الفصل الأول: بوابة الشرق', duration: '30:20', id: 'ch1' },
-          { title: 'الفصل الثاني: أسرار السحرة', duration: '35:15', id: 'ch2' }
-        ],
-        comments: []
-      },
-      {
-        id: 'fantasy4',
-        title: 'مملكة التنين',
-        titleEn: 'Dragon Kingdom',
-        category: 'فيديوهات',
-        categoryEn: 'Videos',
-        subcategory: 'الخيال السحري',
-        subcategoryEn: 'Magic Fantasy',
-        price: '$27.99',
-        description: 'مغامرة في مملكة التنين الأسطورية حيث الأبطال يواجهون تنانين عظيمة.',
-        descriptionEn: 'An adventure in the legendary dragon kingdom where heroes face great dragons.',
-        image: 'https://via.placeholder.com/400x300/1A73E8/FFFFFF?text=فانتازيا+4',
-        rating: 4.8,
-        type: 'فيديو',
-        typeEn: 'Video',
-        format: 'رقمي',
-        formatEn: 'Digital',
-        ratingCategory: 'all',
-        chapters: [
-          { title: 'الفصل الأول: عرش التنين', duration: '40:10', id: 'ch1' },
-          { title: 'الفصل الثاني: معركة الأجنحة', duration: '38:25', id: 'ch2' }
-        ],
-        comments: []
-      },
-      // فيديوهات - رعب
-      {
-        id: 'horror1',
-        title: 'المنزل المسكون',
-        titleEn: 'The Haunted House',
-        category: 'فيديوهات',
-        categoryEn: 'Videos',
-        subcategory: 'الرعب',
-        subcategoryEn: 'Horror',
-        price: '$29.99',
-        description: 'رعب حقيقي في منزل قديم يحمل أسرارا مروعة من الماضي.',
-        descriptionEn: 'Real horror in an old house holding terrifying secrets from the past.',
-        image: 'https://via.placeholder.com/400x300/333333/FFFFFF?text=رعب+1',
-        rating: 4.7,
-        type: 'فيديو',
-        typeEn: 'Video',
-        format: 'رقمي',
-        formatEn: 'Digital',
-        ratingCategory: '18',
-        chapters: [
-          { title: 'الفصل الأول: الدخول', duration: '45:20', id: 'ch1' },
-          { title: 'الفصل الثاني: الأصوات', duration: '38:15', id: 'ch2' }
-        ],
-        comments: []
-      },
-      {
-        id: 'horror2',
-        title: 'ظلال الماضي',
-        titleEn: 'Shadows of the Past',
-        category: 'فيديوهات',
-        categoryEn: 'Videos',
-        subcategory: 'الرعب',
-        subcategoryEn: 'Horror',
-        price: '$26.99',
-        description: 'ظلال من الماضي تعود لتطارد الأحياء بأسرارها المرعبة.',
-        descriptionEn: 'Shadows from the past return to haunt the living with their terrifying secrets.',
-        image: 'https://via.placeholder.com/400x300/666666/FFFFFF?text=رعب+2',
-        rating: 4.5,
-        type: 'فيديو',
-        typeEn: 'Video',
-        format: 'رقمي',
-        formatEn: 'Digital',
-        ratingCategory: '18',
-        chapters: [
-          { title: 'الفصل الأول: الظل الأول', duration: '42:30', id: 'ch1' },
-          { title: 'الفصل الثاني: الذكريات', duration: '39:45', id: 'ch2' }
-        ],
-        comments: []
-      },
-      {
-        id: 'horror3',
-        title: 'الليل الأسود',
-        titleEn: 'The Black Night',
-        category: 'فيديوهات',
-        categoryEn: 'Videos',
-        subcategory: 'الرعب',
-        subcategoryEn: 'Horror',
-        price: '$31.99',
-        description: 'ليلة سوداء حيث تخرج المخاوف القديمة إلى النور.',
-        descriptionEn: 'A black night where old fears come to light.',
-        image: 'https://via.placeholder.com/400x300/000000/FFFFFF?text=رعب+3',
-        rating: 4.9,
-        type: 'فيديو',
-        typeEn: 'Video',
-        format: 'رقمي',
-        formatEn: 'Digital',
-        ratingCategory: '18',
-        chapters: [
-          { title: 'الفصل الأول: بداية الليل', duration: '48:10', id: 'ch1' },
-          { title: 'الفصل الثاني: الذعر', duration: '44:20', id: 'ch2' }
-        ],
-        comments: []
-      },
-      // روايات - تصنيف 16+
-      {
-        id: 'novel16-1',
-        title: 'الهدف السري',
-        titleEn: 'The Secret Target',
-        category: 'روايات',
-        categoryEn: 'Novels',
-        subcategory: 'تشويق، إثارة',
-        subcategoryEn: 'Suspense, Thriller',
-        price: '$19.99',
-        description: 'رواية تشويقية مليئة بالأحداث المثيرة والمفاجآت غير المتوقعة.',
-        descriptionEn: 'A suspenseful novel full of exciting events and unexpected surprises.',
-        image: 'https://via.placeholder.com/400x300/FF6B35/FFFFFF?text=الهدف+السري',
-        rating: 4.6,
-        type: 'رواية',
-        typeEn: 'Novel',
-        format: 'ورقي',
-        formatEn: 'Paperback',
-        ratingCategory: '16',
-        chapters: [],
-        comments: []
-      },
-      {
-        id: 'novel16-2',
-        title: 'حب في باريس',
-        titleEn: 'Love in Paris',
-        category: 'روايات',
-        categoryEn: 'Novels',
-        subcategory: 'رومانسية، دراما',
-        subcategoryEn: 'Romance, Drama',
-        price: '$15.99',
-        description: 'قصة حب درامية في أجواء باريس الرومانسية مع الكثير من المشاعر العميقة.',
-        descriptionEn: 'A dramatic love story in the romantic atmosphere of Paris with lots of deep emotions.',
-        image: 'https://via.placeholder.com/400x300/4285F4/FFFFFF?text=حب+في+باريس',
-        rating: 4.3,
-        type: 'رواية',
-        typeEn: 'Novel',
-        format: 'ورقي',
-        formatEn: 'Paperback',
-        ratingCategory: '16',
-        chapters: [],
-        comments: []
-      },
-      {
-        id: 'novel16-3',
-        title: 'الطريق الطويل',
-        titleEn: 'The Long Road',
-        category: 'روايات',
-        categoryEn: 'Novels',
-        subcategory: 'مغامرة، سفر',
-        subcategoryEn: 'Adventure, Travel',
-        price: '$17.99',
-        description: 'رحلة عبر القارات لاكتشاف الذات والعالم مع مغامرات لا تنتهي.',
-        descriptionEn: 'A journey across continents to discover self and the world with endless adventures.',
-        image: 'https://via.placeholder.com/400x300/FFAB00/000000?text=الطريق+الطويل',
-        rating: 4.4,
-        type: 'رواية',
-        typeEn: 'Novel',
-        format: 'ورقي',
-        formatEn: 'Paperback',
-        ratingCategory: '16',
-        chapters: [],
-        comments: []
-      },
-      {
-        id: 'novel16-4',
-        title: 'الظل المتحرك',
-        titleEn: 'The Moving Shadow',
-        category: 'روايات',
-        categoryEn: 'Novels',
-        subcategory: 'غموض، تشويق',
-        subcategoryEn: 'Mystery, Suspense',
-        price: '$21.99',
-        description: 'حكاية غامضة عن ظل يتحرك ويخفي أسراراً مروعة تحتاج إلى كشفها.',
-        descriptionEn: 'A mysterious tale about a moving shadow hiding terrifying secrets that need to be revealed.',
-        image: 'https://via.placeholder.com/400x300/1A73E8/FFFFFF?text=الظل+المتحرك',
-        rating: 4.8,
-        type: 'رواية',
-        typeEn: 'Novel',
-        format: 'ورقي',
-        formatEn: 'Paperback',
-        ratingCategory: '16',
-        chapters: [],
-        comments: []
-      },
-      {
-        id: 'novel16-5',
-        title: 'أصدقاء المدرسة',
-        titleEn: 'School Friends',
-        category: 'روايات',
-        categoryEn: 'Novels',
-        subcategory: 'مراهقين، صداقة',
-        subcategoryEn: 'Teen, Friendship',
-        price: '$13.99',
-        description: 'قصة صداقة جميلة بين مجموعة من طلاب المدرسة وتحدياتهم اليومية.',
-        descriptionEn: 'A beautiful friendship story between a group of school students and their daily challenges.',
-        image: 'https://via.placeholder.com/400x300/FF6B35/FFFFFF?text=أصدقاء+المدرسة',
-        rating: 4.2,
-        type: 'رواية',
-        typeEn: 'Novel',
-        format: 'ورقي',
-        formatEn: 'Paperback',
-        ratingCategory: '16',
-        chapters: [],
-        comments: []
-      },
-      {
-        id: 'novel16-6',
-        title: 'الحلم الضائع',
-        titleEn: 'The Lost Dream',
-        category: 'روايات',
-        categoryEn: 'Novels',
-        subcategory: 'دراما، واقعية',
-        subcategoryEn: 'Drama, Realistic',
-        price: '$18.99',
-        description: 'دراما واقعية عن شخص يبحث عن حلم ضائع في زمن مليء بالتحديات.',
-        descriptionEn: 'A realistic drama about a person searching for a lost dream in a time full of challenges.',
-        image: 'https://via.placeholder.com/400x300/4285F4/FFFFFF?text=الحلم+الضائع',
-        rating: 4.5,
-        type: 'رواية',
-        typeEn: 'Novel',
-        format: 'ورقي',
-        formatEn: 'Paperback',
-        ratingCategory: '16',
-        chapters: [],
-        comments: []
-      },
-      {
-        id: 'novel16-7',
-        title: 'اللعبة الكبرى',
-        titleEn: 'The Big Game',
-        category: 'روايات',
-        categoryEn: 'Novels',
-        subcategory: 'رياضة، منافسة',
-        subcategoryEn: 'Sports, Competition',
-        price: '$16.99',
-        description: 'رواية رياضية عن المنافسة الشريفة والطموح لتحقيق الأحلام.',
-        descriptionEn: 'A sports novel about fair competition and ambition to achieve dreams.',
-        image: 'https://via.placeholder.com/400x300/FFAB00/000000?text=اللعبة+الكبرى',
-        rating: 4.3,
-        type: 'رواية',
-        typeEn: 'Novel',
-        format: 'ورقي',
-        formatEn: 'Paperback',
-        ratingCategory: '16',
-        chapters: [],
-        comments: []
-      },
-      // روايات - تصنيف 18+
-      {
-        id: 'novel18-1',
-        title: 'الظلام القاتم',
-        titleEn: 'The Deep Darkness',
-        category: 'روايات',
-        categoryEn: 'Novels',
-        subcategory: 'رعب، نفسي',
-        subcategoryEn: 'Horror, Psychological',
-        price: '$24.99',
-        description: 'رواية رعب نفسي عن مواجهة المخاوف الداخلية والظلام الكامن في النفس.',
-        descriptionEn: 'A psychological horror novel about facing inner fears and the darkness within.',
-        image: 'https://via.placeholder.com/400x300/FF6B35/FFFFFF?text=الظلام+القاتم',
-        rating: 4.9,
-        type: 'رواية',
-        typeEn: 'Novel',
-        format: 'ورقي',
-        formatEn: 'Paperback',
-        ratingCategory: '18',
-        chapters: [],
-        comments: []
-      },
-      {
-        id: 'novel18-2',
-        title: 'لعبة السلطة',
-        titleEn: 'Power Game',
-        category: 'روايات',
-        categoryEn: 'Novels',
-        subcategory: 'إثارة، سياسة',
-        subcategoryEn: 'Thriller, Politics',
-        price: '$22.99',
-        description: 'صراع على السلطة في عالم السياسة المظلم حيث الغدر والخيانة.',
-        descriptionEn: 'A power struggle in the dark world of politics where betrayal and treachery abound.',
-        image: 'https://via.placeholder.com/400x300/4285F4/FFFFFF?text=لعبة+السلطة',
-        rating: 4.7,
-        type: 'رواية',
-        typeEn: 'Novel',
-        format: 'ورقي',
-        formatEn: 'Paperback',
-        ratingCategory: '18',
-        chapters: [],
-        comments: []
-      },
-      {
-        id: 'novel18-3',
-        title: 'الجريمة المثالية',
-        titleEn: 'The Perfect Crime',
-        category: 'روايات',
-        categoryEn: 'Novels',
-        subcategory: 'جريمة، تشويق',
-        subcategoryEn: 'Crime, Thriller',
-        price: '$23.99',
-        description: 'قصة جريمة غامضة تحاول الشرطة حلها بكل الوسائل الممكنة.',
-        descriptionEn: 'A mysterious crime story that the police are trying to solve by all possible means.',
-        image: 'https://via.placeholder.com/400x300/FFAB00/000000?text=الجريمة+المثالية',
-        rating: 4.8,
-        type: 'رواية',
-        typeEn: 'Novel',
-        format: 'ورقي',
-        formatEn: 'Paperback',
-        ratingCategory: '18',
-        chapters: [],
-        comments: []
-      },
-      {
-        id: 'novel18-4',
-        title: 'الوريث',
-        titleEn: 'The Heir',
-        category: 'روايات',
-        categoryEn: 'Novels',
-        subcategory: 'دراما، عائلي',
-        subcategoryEn: 'Drama, Family',
-        price: '$21.99',
-        description: 'صراع عائلي حول الميراث والسلطة داخل عائلة ثرية.',
-        descriptionEn: 'A family struggle over inheritance and power within a wealthy family.',
-        image: 'https://via.placeholder.com/400x300/1A73E8/FFFFFF?text=الوريث',
-        rating: 4.6,
-        type: 'رواية',
-        typeEn: 'Novel',
-        format: 'ورقي',
-        formatEn: 'Paperback',
-        ratingCategory: '18',
-        chapters: [],
-        comments: []
-      },
-      {
-        id: 'novel18-5',
-        title: 'الطبيب المجنون',
-        titleEn: 'The Mad Doctor',
-        category: 'روايات',
-        categoryEn: 'Novels',
-        subcategory: 'رعب، طبي',
-        subcategoryEn: 'Horror, Medical',
-        price: '$25.99',
-        description: 'قصة طبيب مجنون يقوم بتجارب مرعبة على المرضى.',
-        descriptionEn: 'The story of a mad doctor who performs terrifying experiments on patients.',
-        image: 'https://via.placeholder.com/400x300/FF6B35/FFFFFF?text=الطبيب+المجنون',
-        rating: 4.9,
-        type: 'رواية',
-        typeEn: 'Novel',
-        format: 'ورقي',
-        formatEn: 'Paperback',
-        ratingCategory: '18',
-        chapters: [],
-        comments: []
-      },
-      // روايات - جميع الأعمار
-      {
-        id: 'novel-all-1',
-        title: 'مغامرات الطفل الذكي',
-        titleEn: 'Adventures of the Smart Child',
-        category: 'روايات',
-        categoryEn: 'Novels',
-        subcategory: 'مغامرة، أطفال',
-        subcategoryEn: 'Adventure, Children',
-        price: '$12.99',
-        description: 'قصة مغامرات ممتعة لطفل ذكي يحل الألغاز وينقذ الموقف.',
-        descriptionEn: 'A fun adventure story about a smart child who solves puzzles and saves the day.',
-        image: 'https://via.placeholder.com/400x300/FF6B35/FFFFFF?text=مغامرات+الطفل',
-        rating: 4.0,
-        type: 'رواية',
-        typeEn: 'Novel',
-        format: 'ورقي',
-        formatEn: 'Paperback',
-        ratingCategory: 'all',
-        chapters: [],
-        comments: []
-      },
-      {
-        id: 'novel-all-2',
-        title: 'العائلة السعيدة',
-        titleEn: 'The Happy Family',
-        category: 'روايات',
-        categoryEn: 'Novels',
-        subcategory: 'عائلي، كوميدي',
-        subcategoryEn: 'Family, Comedy',
-        price: '$14.99',
-        description: 'قصة عائلة سعيدة وتجاربها المضحكة في الحياة اليومية.',
-        descriptionEn: 'The story of a happy family and their funny experiences in daily life.',
-        image: 'https://via.placeholder.com/400x300/4285F4/FFFFFF?text=العائلة+السعيدة',
-        rating: 4.2,
-        type: 'رواية',
-        typeEn: 'Novel',
-        format: 'ورقي',
-        formatEn: 'Paperback',
-        ratingCategory: 'all',
-        chapters: [],
-        comments: []
-      }
-    ];
+    // ====== تحميل المنتجات من Firebase مع دعم Base64 ======
+    async function loadProductsFromFirebase() {
+        try {
+            const productsRef = ref(database, 'products');
+            const snapshot = await get(productsRef);
+            allProducts = [];
+            
+            if (snapshot.exists()) {
+                const products = snapshot.val();
+                Object.keys(products).forEach(productId => {
+                    const product = {
+                        id: productId,
+                        ...products[productId]
+                    };
+                    
+                    // التأكد من وجود صورة
+                    product.image = getProductImage(product);
+                    
+                    allProducts.push(product);
+                });
+                console.log(`تم تحميل ${allProducts.length} منتج من Firebase`);
+            } else {
+                console.log("لا توجد منتجات في Firebase، يتم استخدام بيانات عينة");
+                loadSampleProducts();
+            }
+            
+            renderAllContent();
+            return true;
+        } catch (error) {
+            console.error("خطأ في تحميل المنتجات من Firebase:", error);
+            loadSampleProducts();
+            renderAllContent();
+            return false;
+        }
+    }
+
+    // ====== إعداد مستمع في الوقت الحقيقي للمنتجات ======
+    function setupRealtimeProductsListener() {
+        try {
+            const productsRef = ref(database, 'products');
+            
+            // الاستماع للتغييرات في الوقت الحقيقي
+            onValue(productsRef, (snapshot) => {
+                if (snapshot.exists()) {
+                    const products = snapshot.val();
+                    allProducts = [];
+                    
+                    Object.keys(products).forEach(productId => {
+                        const product = {
+                            id: productId,
+                            ...products[productId]
+                        };
+                        
+                        product.image = getProductImage(product);
+                        allProducts.push(product);
+                    });
+                    
+                    console.log(`تم تحديث المنتجات في الوقت الحقيقي: ${allProducts.length} منتج`);
+                    
+                    // تحديث الواجهة
+                    renderAllContent();
+                    
+                    // إذا كانت نافذة البحث مفتوحة، تحديث نتائج البحث
+                    if (document.getElementById('search-overlay').style.display === 'block') {
+                        searchProducts();
+                    }
+                    
+                    // إذا كانت نافذة عرض الكل للقصص مفتوحة، تحديثها
+                    if (document.getElementById('all-stories-modal').style.display === 'block') {
+                        displayAllStories();
+                    }
+                }
+            });
+            
+            console.log("تم إعداد مستمع المنتجات في الوقت الحقيقي");
+        } catch (error) {
+            console.error("خطأ في إعداد مستمع المنتجات:", error);
+        }
+    }
+
+    // ====== بيانات عينة للمنتجات مع Base64 ======
+    function loadSampleProducts() {
+        allProducts = [
+            {
+                id: 'story1',
+                title: 'النبات الأحمر',
+                titleEn: 'The Red Plant',
+                category: 'قصص',
+                categoryEn: 'Stories',
+                subcategory: 'ضحك، تفاهة',
+                subcategoryEn: 'Comedy, Triviality',
+                price: '$9.99',
+                description: 'قصة ممتعة تحكي مغامرات نبات أحمر في عالم غريب.',
+                descriptionEn: 'A fun story about the adventures of a red plant in a strange world.',
+                image: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICAgIDxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjRkY2QjM1Ii8+CiAgICA8dGV4dCB4PSIyMDAiIHk9IjE1MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjI0IiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZGlyZWN0aW9uPSJydGwiPiDZhdi52LHYp9inINin2YTZitmE2YrYpzwvdGV4dD4KPC9zdmc+',
+                rating: 4.2,
+                type: 'قصة',
+                typeEn: 'Story',
+                format: 'رقمي',
+                formatEn: 'Digital',
+                ratingCategory: 'all',
+                chapters: [],
+                comments: []
+            },
+            {
+                id: 'story2',
+                title: 'مغامرات في الغابة',
+                titleEn: 'Adventures in the Forest',
+                category: 'قصص',
+                categoryEn: 'Stories',
+                subcategory: 'مغامرة، خيال',
+                subcategoryEn: 'Adventure, Fantasy',
+                price: '$12.99',
+                description: 'مغامرات مثيرة في أعماق الغابات السحرية.',
+                descriptionEn: 'Exciting adventures in the depths of magical forests.',
+                image: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICAgIDxyZWN0IHdpZHRoPSI400IiBoZWlnaHQ9IjMwMCIgZmlsbD0iIzQyODVGNCIvPgogICAgPHRleHQgeD0iMjAwIiB5PSIxNTAiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIyNCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRpcmVjdGlvbj0icnRsIj4g2LPZiNin2KjYp9ix2YIg2YrZhNin2YYg2YfYs9io2YIKPC90ZXh0Pgo8L3N2Zz4=',
+                rating: 4.5,
+                type: 'قصة',
+                typeEn: 'Story',
+                format: 'رقمي',
+                formatEn: 'Digital',
+                ratingCategory: 'all',
+                chapters: [],
+                comments: []
+            },
+            {
+                id: 'manga1',
+                title: 'مانجا الفانتازيا 1',
+                titleEn: 'Fantasy Manga 1',
+                category: 'مانجا',
+                categoryEn: 'Manga',
+                subcategory: 'خيال سحري',
+                subcategoryEn: 'Magic Fantasy',
+                price: '$8.99',
+                description: 'مانجا فانتازيا سحرية مليئة بالمغامرات.',
+                descriptionEn: 'Magical fantasy manga full of adventures.',
+                image: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICAgIDxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjRkY2QjM1Ii8+CiAgICA8dGV4dCB4PSIyMDAiIHk9IjE1MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjI0IiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZGlyZWN0aW9uPSJydGwiPiDYs9mI2KfYqNinINin2YXYudin2KggMQo8L3RleHQ+Cjwvc3ZnPg==',
+                rating: 4.3,
+                type: 'مانجا',
+                typeEn: 'Manga',
+                format: 'رقمي',
+                formatEn: 'Digital',
+                ratingCategory: 'all',
+                chapters: [],
+                comments: []
+            },
+            {
+                id: 'fantasy1',
+                title: 'أساطير السحر القديم',
+                titleEn: 'Legends of Ancient Magic',
+                category: 'فيديوهات',
+                categoryEn: 'Videos',
+                subcategory: 'الخيال السحري',
+                subcategoryEn: 'Magic Fantasy',
+                price: '$24.99',
+                description: 'رحلة سحرية إلى عالم الأساطير القديمة.',
+                descriptionEn: 'A magical journey to the world of ancient legends.',
+                image: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICAgIDxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjRkY2QjM1Ii8+CiAgICA8dGV4dCB4PSIyMDAiIHk9IjE1MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjIwIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZGlyZWN0aW9uPSJydGwiPiDYqNmH2YjYryDZh9mI2KfYryDYqdin2KjZhiA8L3RleHQ+Cjwvc3ZnPg==',
+                rating: 4.5,
+                type: 'فيديو',
+                typeEn: 'Video',
+                format: 'رقمي',
+                formatEn: 'Digital',
+                ratingCategory: 'all',
+                chapters: [
+                    { title: 'الفصل الأول: البداية', duration: '25:45', id: 'ch1' },
+                    { title: 'الفصل الثاني: الاكتشاف', duration: '28:30', id: 'ch2' }
+                ],
+                comments: []
+            },
+            {
+                id: 'novel16-1',
+                title: 'الهدف السري',
+                titleEn: 'The Secret Target',
+                category: 'روايات',
+                categoryEn: 'Novels',
+                subcategory: 'تشويق، إثارة',
+                subcategoryEn: 'Suspense, Thriller',
+                price: '$19.99',
+                description: 'رواية تشويقية مليئة بالأحداث المثيرة.',
+                descriptionEn: 'A suspenseful novel full of exciting events.',
+                image: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICAgIDxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjRkY2QjM1Ii8+CiAgICA8dGV4dCB4PSIyMDAiIHk9IjE1MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjIyIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZGlyZWN0aW9uPSJydGwiPiDZhdi52LHYp9inINin2YTZitmE2YrYpzwvdGV4dD4KPC9zdmc+',
+                rating: 4.6,
+                type: 'رواية',
+                typeEn: 'Novel',
+                format: 'ورقي',
+                formatEn: 'Paperback',
+                ratingCategory: '16',
+                chapters: [],
+                comments: []
+            },
+            {
+                id: 'novel18-1',
+                title: 'الظلام القاتم',
+                titleEn: 'The Deep Darkness',
+                category: 'روايات',
+                categoryEn: 'Novels',
+                subcategory: 'رعب، نفسي',
+                subcategoryEn: 'Horror, Psychological',
+                price: '$24.99',
+                description: 'رواية رعب نفسي عن مواجهة المخاوف الداخلية.',
+                descriptionEn: 'A psychological horror novel about facing inner fears.',
+                image: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICAgIDxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjRkY2QjM1Ii8+CiAgICA8dGV4dCB4PSIyMDAiIHk9IjE1MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjIyIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZGlyZWN0aW9uPSJydGwiPiDZhdiv2LXYudin2Kcg2KfZgtmI2LHYpzwvdGV4dD4KPC9zdmc+',
+                rating: 4.9,
+                type: 'رواية',
+                typeEn: 'Novel',
+                format: 'ورقي',
+                formatEn: 'Paperback',
+                ratingCategory: '18',
+                chapters: [],
+                comments: []
+            }
+        ];
+    }
 
     // ====== الوظائف الأساسية ======
     // تحديث عداد السلة
     function updateCartBadge() {
-      try {
-        const user = JSON.parse(localStorage.getItem('user') || 'null');
-        if (!user || !user.email) {
-          cartCount = 0;
-        } else {
-          const userEmail = user.email;
-          const CART_KEY = `cart_${userEmail}`;
-          const cart = JSON.parse(localStorage.getItem(CART_KEY) || '[]');
-          cartCount = cart.reduce((sum, item) => sum + (item.quantity || 1), 0);
+        try {
+            const user = JSON.parse(localStorage.getItem('user') || 'null');
+            if (!user || !user.email) {
+                cartCount = 0;
+            } else {
+                const userEmail = user.email;
+                const CART_KEY = `cart_${userEmail}`;
+                const cart = JSON.parse(localStorage.getItem(CART_KEY) || '[]');
+                cartCount = cart.reduce((sum, item) => sum + (item.quantity || 1), 0);
+            }
+            
+            const badgeElement = document.getElementById('cart-badge');
+            if (badgeElement) {
+                badgeElement.textContent = cartCount;
+                if (cartCount > 0) {
+                    badgeElement.style.display = 'flex';
+                } else {
+                    badgeElement.style.display = 'none';
+                }
+            }
+        } catch (error) {
+            console.error('Error updating cart badge:', error);
+            cartCount = 0;
+            const badgeElement = document.getElementById('cart-badge');
+            if (badgeElement) {
+                badgeElement.textContent = '0';
+            }
         }
-        
-        const badgeElement = document.getElementById('cart-badge');
-        if (badgeElement) {
-          badgeElement.textContent = cartCount;
-          // إظهار/إخفاء البادج بناءً على العدد
-          if (cartCount > 0) {
-            badgeElement.style.display = 'flex';
-          } else {
-            badgeElement.style.display = 'none';
-          }
-        }
-      } catch (error) {
-        console.error('Error updating cart badge:', error);
-        cartCount = 0;
-        const badgeElement = document.getElementById('cart-badge');
-        if (badgeElement) {
-          badgeElement.textContent = '0';
-        }
-      }
     }
 
     // ====== دالة إضافة المنتج إلى السلة ======
     function addToCart(productId, event = null) {
-      // إيقاف الانتشار إذا كان هناك حدث
-      if (event) {
-        event.stopPropagation();
-        event.preventDefault();
-      }
-      
-      // التحقق من تسجيل الدخول
-      const user = checkAuth();
-      if (!user) {
-        showNotification(currentLanguage === 'ar' ? 
-          'الرجاء تسجيل الدخول أولاً' : 
-          'Please login first');
-        return;
-      }
-      
-      // البحث عن المنتج
-      const product = allProducts.find(p => p.id === productId);
-      if (!product) {
-        console.error('Product not found:', productId);
-        showNotification(currentLanguage === 'ar' ? 
-          'المنتج غير موجود' : 
-          'Product not found');
-        return;
-      }
-      
-      // تحويل السعر من نص إلى رقم
-      const priceValue = parseFloat(product.price.replace('$', ''));
-      
-      // الحصول على السلة الحالية من localStorage
-      const userEmail = user.email;
-      const CART_KEY = `cart_${userEmail}`;
-      let cart = JSON.parse(localStorage.getItem(CART_KEY) || '[]');
-      
-      // التحقق مما إذا كان المنتج موجوداً بالفعل في السلة
-      const existingIndex = cart.findIndex(item => item.id === productId);
-      
-      if (existingIndex > -1) {
-        // زيادة الكمية إذا كان المنتج موجوداً
-        cart[existingIndex].quantity++;
-      } else {
-        // إضافة المنتج الجديد
-        cart.push({
-          id: product.id,
-          title: currentLanguage === 'ar' ? product.title : product.titleEn,
-          price: priceValue,
-          image: product.image,
-          quantity: 1,
-          category: currentLanguage === 'ar' ? product.category : product.categoryEn,
-          type: currentLanguage === 'ar' ? product.type : product.typeEn,
-          format: currentLanguage === 'ar' ? product.format : product.formatEn,
-          rating: product.rating,
-          description: currentLanguage === 'ar' ? product.description : product.descriptionEn
-        });
-      }
-      
-      // حفظ السلة المحدثة
-      try {
-        localStorage.setItem(CART_KEY, JSON.stringify(cart));
-        console.log('Cart saved:', cart); // للتشخيص
+        if (event) {
+            event.stopPropagation();
+            event.preventDefault();
+        }
         
-        // تحديث عداد السلة
-        updateCartBadge();
+        const user = checkAuth();
+        if (!user) {
+            showNotification(currentLanguage === 'ar' ? 
+                'الرجاء تسجيل الدخول أولاً' : 
+                'Please login first');
+            return;
+        }
         
-        // إظهار إشعار النجاح
-        const productName = currentLanguage === 'ar' ? product.title : product.titleEn;
-        showNotification(currentLanguage === 'ar' ? 
-          `تمت إضافة "${productName}" إلى السلة بنجاح!` : 
-          `"${productName}" added to cart successfully!`);
+        const product = allProducts.find(p => p.id === productId);
+        if (!product) {
+            console.error('Product not found:', productId);
+            showNotification(currentLanguage === 'ar' ? 
+                'المنتج غير موجود' : 
+                'Product not found');
+            return;
+        }
+        
+        const priceValue = parseFloat(product.price.replace('$', ''));
+        const userEmail = user.email;
+        const CART_KEY = `cart_${userEmail}`;
+        let cart = JSON.parse(localStorage.getItem(CART_KEY) || '[]');
+        const existingIndex = cart.findIndex(item => item.id === productId);
+        
+        if (existingIndex > -1) {
+            cart[existingIndex].quantity++;
+        } else {
+            cart.push({
+                id: product.id,
+                title: currentLanguage === 'ar' ? product.title : product.titleEn,
+                price: priceValue,
+                image: getProductImage(product),
+                quantity: 1,
+                category: currentLanguage === 'ar' ? product.category : product.categoryEn,
+                type: currentLanguage === 'ar' ? product.type : product.typeEn,
+                format: currentLanguage === 'ar' ? product.format : product.formatEn,
+                rating: product.rating,
+                description: currentLanguage === 'ar' ? product.description : product.descriptionEn
+            });
+        }
+        
+        try {
+            localStorage.setItem(CART_KEY, JSON.stringify(cart));
+            updateCartBadge();
             
-        // تسجيل النشاط
-        trackUserActivity('add_to_cart', productId);
-        
-      } catch (error) {
-        console.error('Error saving cart:', error);
-        showNotification(currentLanguage === 'ar' ? 
-          'حدث خطأ أثناء حفظ السلة' : 
-          'Error saving cart');
-      }
+            const productName = currentLanguage === 'ar' ? product.title : product.titleEn;
+            showNotification(currentLanguage === 'ar' ? 
+                `تمت إضافة "${productName}" إلى السلة بنجاح!` : 
+                `"${productName}" added to cart successfully!`);
+                
+            trackUserActivity('add_to_cart', productId);
+            
+        } catch (error) {
+            console.error('Error saving cart:', error);
+            showNotification(currentLanguage === 'ar' ? 
+                'حدث خطأ أثناء حفظ السلة' : 
+                'Error saving cart');
+        }
     }
 
     // إظهار إشعار
     function showNotification(message) {
-      const notification = document.createElement('div');
-      notification.style.cssText = `
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background: var(--gradient-primary);
-        color: white;
-        padding: 15px 25px;
-        border-radius: var(--border-radius-md);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        z-index: 10000;
-        animation: slideIn 0.3s ease-out;
-        max-width: 300px;
-      `;
-      notification.textContent = message;
-      document.body.appendChild(notification);
-      
-      setTimeout(() => {
-        notification.style.animation = 'slideOut 0.3s ease-out';
-        setTimeout(() => notification.remove(), 300);
-      }, 3000);
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #FF6B35, #FF8E53);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 10000;
+            animation: slideIn 0.3s ease-out;
+            max-width: 300px;
+        `;
+        notification.textContent = message;
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            notification.style.animation = 'slideOut 0.3s ease-out';
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
     }
 
     // ====== دالة الانتقال إلى صفحة السلة ======
     function goToCart() {
-      const user = checkAuth();
-      if (!user) return;
-      
-      window.location.href = 'cart.html';
+        const user = checkAuth();
+        if (!user) return;
+        
+        window.location.href = 'cart.html';
     }
 
     // تبديل الإعدادات
     function toggleSettings() {
-      const panel = document.getElementById('panel');
-      panel.classList.toggle('show');
+        const panel = document.getElementById('panel');
+        panel.classList.toggle('show');
     }
 
     // تبديل اللغة
     function toggleLanguage() {
-      currentLanguage = currentLanguage === 'ar' ? 'en' : 'ar';
-      const languageValue = document.getElementById('language-value');
-      
-      if (currentLanguage === 'ar') {
-        languageValue.textContent = 'العربية';
-        document.documentElement.setAttribute('lang', 'ar');
-        document.documentElement.setAttribute('dir', 'rtl');
-        document.querySelectorAll('.rtl-text').forEach(el => el.style.display = '');
-        document.querySelectorAll('.ltr-text').forEach(el => el.style.display = 'none');
-      } else {
-        languageValue.textContent = 'English';
-        document.documentElement.setAttribute('lang', 'en');
-        document.documentElement.setAttribute('dir', 'ltr');
-        document.querySelectorAll('.rtl-text').forEach(el => el.style.display = 'none');
-        document.querySelectorAll('.ltr-text').forEach(el => el.style.display = '');
-      }
-      
-      localStorage.setItem('language', currentLanguage);
-      localStorage.setItem('direction', currentLanguage === 'ar' ? 'rtl' : 'ltr');
-      updateMangaNavigation();
-      updateSearchPlaceholder();
-      renderAllContent();
+        currentLanguage = currentLanguage === 'ar' ? 'en' : 'ar';
+        const languageValue = document.getElementById('language-value');
+        
+        if (currentLanguage === 'ar') {
+            languageValue.textContent = 'العربية';
+            document.documentElement.setAttribute('lang', 'ar');
+            document.documentElement.setAttribute('dir', 'rtl');
+            document.querySelectorAll('.rtl-text').forEach(el => el.style.display = '');
+            document.querySelectorAll('.ltr-text').forEach(el => el.style.display = 'none');
+        } else {
+            languageValue.textContent = 'English';
+            document.documentElement.setAttribute('lang', 'en');
+            document.documentElement.setAttribute('dir', 'ltr');
+            document.querySelectorAll('.rtl-text').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('.ltr-text').forEach(el => el.style.display = '');
+        }
+        
+        localStorage.setItem('language', currentLanguage);
+        localStorage.setItem('direction', currentLanguage === 'ar' ? 'rtl' : 'ltr');
+        updateMangaNavigation();
+        updateSearchPlaceholder();
+        renderAllContent();
     }
 
     // تبديل وضع العرض (ترتيب المنتجات)
     function toggleDisplayMode() {
-      const modes = ['random', 'rating', 'newest'];
-      const modeNames = { random: 'عشوائي', rating: 'الأعلى تقييماً', newest: 'الأحدث' };
-      const modeNamesEn = { random: 'Random', rating: 'Highest Rated', newest: 'Newest' };
-      
-      const currentIndex = modes.indexOf(displayMode);
-      const nextIndex = (currentIndex + 1) % modes.length;
-      displayMode = modes[nextIndex];
-      
-      const displayModeValue = document.getElementById('display-mode-value');
-      if (currentLanguage === 'ar') {
-        displayModeValue.textContent = modeNames[displayMode];
-      } else {
-        displayModeValue.textContent = modeNamesEn[displayMode];
-      }
-      
-      localStorage.setItem('displayMode', displayMode);
-      renderAllContent();
+        const modes = ['random', 'rating', 'newest'];
+        const modeNames = { random: 'عشوائي', rating: 'الأعلى تقييماً', newest: 'الأحدث' };
+        const modeNamesEn = { random: 'Random', rating: 'Highest Rated', newest: 'Newest' };
+        
+        const currentIndex = modes.indexOf(displayMode);
+        const nextIndex = (currentIndex + 1) % modes.length;
+        displayMode = modes[nextIndex];
+        
+        const displayModeValue = document.getElementById('display-mode-value');
+        if (currentLanguage === 'ar') {
+            displayModeValue.textContent = modeNames[displayMode];
+        } else {
+            displayModeValue.textContent = modeNamesEn[displayMode];
+        }
+        
+        localStorage.setItem('displayMode', displayMode);
+        renderAllContent();
     }
 
     // دالة ترتيب المنتجات حسب الوضع
     function sortProducts(products) {
-      const sortedProducts = [...products];
-      
-      switch(displayMode) {
-        case 'rating':
-          return sortedProducts.sort((a, b) => b.rating - a.rating);
-        case 'newest':
-          // نرتب حسب ID كمثال (في الحقيقة يجب أن يكون لديك تاريخ الإضافة)
-          return sortedProducts.sort((a, b) => b.id.localeCompare(a.id));
-        case 'random':
-        default:
-          return shuffleArray(sortedProducts);
-      }
+        const sortedProducts = [...products];
+        
+        switch(displayMode) {
+            case 'rating':
+                return sortedProducts.sort((a, b) => b.rating - a.rating);
+            case 'newest':
+                return sortedProducts.sort((a, b) => b.id.localeCompare(a.id));
+            case 'random':
+            default:
+                return shuffleArray(sortedProducts);
+        }
     }
 
     // دالة خلط عشوائي
     function shuffleArray(array) {
-      const newArray = [...array];
-      for (let i = newArray.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
-      }
-      return newArray;
+        const newArray = [...array];
+        for (let i = newArray.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+        }
+        return newArray;
     }
 
     // تطبيق المظهر
     function applyTheme() {
-      if (currentTheme === 'فاتح') {
+        if (currentTheme === 'فاتح') {
+            document.documentElement.style.setProperty('--dark-bg', '#f5f5f5');
+            document.documentElement.style.setProperty('--darker-bg', '#e0e0e0');
+            document.documentElement.style.setProperty('--card-bg', '#ffffff');
+            document.documentElement.style.setProperty('--text-primary', '#333333');
+            document.documentElement.style.setProperty('--text-secondary', '#666666');
+            document.documentElement.style.setProperty('--border-color', '#dddddd');
+        } else if (currentTheme === 'تلقائي') {
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (prefersDark) {
+                applyDarkTheme();
+            } else {
+                applyLightTheme();
+            }
+        } else {
+            applyDarkTheme();
+        }
+    }
+
+    function applyDarkTheme() {
+        document.documentElement.style.setProperty('--dark-bg', '#121212');
+        document.documentElement.style.setProperty('--darker-bg', '#0d0d0d');
+        document.documentElement.style.setProperty('--card-bg', '#1e1e1e');
+        document.documentElement.style.setProperty('--text-primary', '#ffffff');
+        document.documentElement.style.setProperty('--text-secondary', '#b0b0b0');
+        document.documentElement.style.setProperty('--border-color', '#333333');
+    }
+
+    function applyLightTheme() {
         document.documentElement.style.setProperty('--dark-bg', '#f5f5f5');
         document.documentElement.style.setProperty('--darker-bg', '#e0e0e0');
         document.documentElement.style.setProperty('--card-bg', '#ffffff');
         document.documentElement.style.setProperty('--text-primary', '#333333');
         document.documentElement.style.setProperty('--text-secondary', '#666666');
         document.documentElement.style.setProperty('--border-color', '#dddddd');
-      } else if (currentTheme === 'تلقائي') {
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        if (prefersDark) {
-          applyDarkTheme();
-        } else {
-          applyLightTheme();
-        }
-      } else {
-        applyDarkTheme();
-      }
-    }
-
-    function applyDarkTheme() {
-      document.documentElement.style.setProperty('--dark-bg', '#121212');
-      document.documentElement.style.setProperty('--darker-bg', '#0d0d0d');
-      document.documentElement.style.setProperty('--card-bg', '#1e1e1e');
-      document.documentElement.style.setProperty('--text-primary', '#ffffff');
-      document.documentElement.style.setProperty('--text-secondary', '#b0b0b0');
-      document.documentElement.style.setProperty('--border-color', '#333333');
-    }
-
-    function applyLightTheme() {
-      document.documentElement.style.setProperty('--dark-bg', '#f5f5f5');
-      document.documentElement.style.setProperty('--darker-bg', '#e0e0e0');
-      document.documentElement.style.setProperty('--card-bg', '#ffffff');
-      document.documentElement.style.setProperty('--text-primary', '#333333');
-      document.documentElement.style.setProperty('--text-secondary', '#666666');
-      document.documentElement.style.setProperty('--border-color', '#dddddd');
     }
 
     // تغيير حجم النص
     function updateTextSize(value) {
-      const percent = parseInt(value);
-      document.getElementById('textSizePercent').textContent = percent + '%';
-      const scale = percent / 100;
-      document.documentElement.style.fontSize = `calc(1rem * ${scale})`;
-      localStorage.setItem('textSize', value);
+        const percent = parseInt(value);
+        document.getElementById('textSizePercent').textContent = percent + '%';
+        const scale = percent / 100;
+        document.documentElement.style.fontSize = `calc(1rem * ${scale})`;
+        localStorage.setItem('textSize', value);
     }
 
     // ====== إدارة التنقل في قسم المانجا ======
     function initializeMangaNavigation() {
-      const mangaItems = allProducts.filter(p => p.category === 'مانجا');
-      const sortedManga = sortProducts(mangaItems);
-      const totalPages = Math.ceil(sortedManga.length / mangaItemsPerPage);
-      
-      document.getElementById('total-manga').textContent = totalPages;
-      const dotsContainer = document.getElementById('manga-dots');
-      dotsContainer.innerHTML = '';
-      
-      for (let i = 0; i < totalPages; i++) {
-        const dot = document.createElement('div');
-        dot.className = 'page-dot';
-        if (i === 0) dot.classList.add('active');
-        dot.dataset.page = i;
-        dot.addEventListener('click', () => goToMangaPage(i));
-        dotsContainer.appendChild(dot);
-      }
-      
-      showMangaPage(0);
+        const mangaItems = allProducts.filter(p => p.category === 'مانجا');
+        const sortedManga = sortProducts(mangaItems);
+        const totalPages = Math.ceil(sortedManga.length / mangaItemsPerPage);
+        
+        document.getElementById('total-manga').textContent = totalPages;
+        const dotsContainer = document.getElementById('manga-dots');
+        if (dotsContainer) {
+            dotsContainer.innerHTML = '';
+            
+            for (let i = 0; i < totalPages; i++) {
+                const dot = document.createElement('div');
+                dot.className = 'page-dot';
+                if (i === 0) dot.classList.add('active');
+                dot.dataset.page = i;
+                dot.addEventListener('click', () => goToMangaPage(i));
+                dotsContainer.appendChild(dot);
+            }
+        }
+        
+        showMangaPage(0);
     }
     
     function showMangaPage(page) {
-      currentMangaPage = page;
-      const mangaItems = allProducts.filter(p => p.category === 'مانجا');
-      const sortedManga = sortProducts(mangaItems);
-      const startIndex = page * mangaItemsPerPage;
-      const endIndex = startIndex + mangaItemsPerPage;
-      const itemsToShow = sortedManga.slice(startIndex, endIndex);
-      
-      const container = document.getElementById('manga-container');
-      container.innerHTML = '';
-      
-      itemsToShow.forEach(product => {
-        const item = document.createElement('div');
-        item.className = 'scroll-item manga-item';
-        item.onclick = () => openProductDetail(product.id);
-        item.innerHTML = `
-          <img src="${product.image}" alt="${product.title}" class="scroll-image">
-          <div class="scroll-info">
-            <div class="scroll-title rtl-text">${product.title}</div>
-            <div class="scroll-title ltr-text" style="display: none;">${product.titleEn}</div>
-            <div class="scroll-type rtl-text">${product.subcategory}</div>
-            <div class="scroll-type ltr-text" style="display: none;">${product.subcategoryEn}</div>
-          </div>
-        `;
-        container.appendChild(item);
-      });
-      
-      document.getElementById('current-manga').textContent = page + 1;
-      document.querySelectorAll('.page-dot').forEach((dot, index) => {
-        if (index === page) {
-          dot.classList.add('active');
-        } else {
-          dot.classList.remove('active');
+        currentMangaPage = page;
+        const mangaItems = allProducts.filter(p => p.category === 'مانجا');
+        const sortedManga = sortProducts(mangaItems);
+        const startIndex = page * mangaItemsPerPage;
+        const endIndex = startIndex + mangaItemsPerPage;
+        const itemsToShow = sortedManga.slice(startIndex, endIndex);
+        
+        const container = document.getElementById('manga-container');
+        if (container) {
+            container.innerHTML = '';
+            
+            itemsToShow.forEach(product => {
+                const item = document.createElement('div');
+                item.className = 'scroll-item manga-item';
+                item.onclick = () => openProductDetail(product.id);
+                item.innerHTML = `
+                    <img src="${getProductImage(product)}" alt="${product.title}" class="scroll-image">
+                    <div class="scroll-info">
+                        <div class="scroll-title rtl-text">${product.title}</div>
+                        <div class="scroll-title ltr-text" style="display: none;">${product.titleEn}</div>
+                        <div class="scroll-type rtl-text">${product.subcategory}</div>
+                        <div class="scroll-type ltr-text" style="display: none;">${product.subcategoryEn}</div>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+            
+            document.getElementById('current-manga').textContent = page + 1;
+            document.querySelectorAll('.page-dot').forEach((dot, index) => {
+                if (index === page) {
+                    dot.classList.add('active');
+                } else {
+                    dot.classList.remove('active');
+                }
+            });
         }
-      });
-      
-      updateMangaNavigation();
+        
+        updateMangaNavigation();
     }
     
     function goToMangaPage(page) {
-      const mangaItems = allProducts.filter(p => p.category === 'مانجا');
-      const sortedManga = sortProducts(mangaItems);
-      if (page >= 0 && page < Math.ceil(sortedManga.length / mangaItemsPerPage)) {
-        showMangaPage(page);
-      }
+        const mangaItems = allProducts.filter(p => p.category === 'مانجا');
+        const sortedManga = sortProducts(mangaItems);
+        if (page >= 0 && page < Math.ceil(sortedManga.length / mangaItemsPerPage)) {
+            showMangaPage(page);
+        }
     }
     
     function scrollManga(direction) {
-      const mangaItems = allProducts.filter(p => p.category === 'مانجا');
-      const sortedManga = sortProducts(mangaItems);
-      const totalPages = Math.ceil(sortedManga.length / mangaItemsPerPage);
-      
-      if (direction === 'next') {
-        if (currentMangaPage < totalPages - 1) {
-          goToMangaPage(currentMangaPage + 1);
+        const mangaItems = allProducts.filter(p => p.category === 'مانجا');
+        const sortedManga = sortProducts(mangaItems);
+        const totalPages = Math.ceil(sortedManga.length / mangaItemsPerPage);
+        
+        if (direction === 'next') {
+            if (currentMangaPage < totalPages - 1) {
+                goToMangaPage(currentMangaPage + 1);
+            }
+        } else if (direction === 'prev') {
+            if (currentMangaPage > 0) {
+                goToMangaPage(currentMangaPage - 1);
+            }
         }
-      } else if (direction === 'prev') {
-        if (currentMangaPage > 0) {
-          goToMangaPage(currentMangaPage - 1);
-        }
-      }
     }
     
     function updateMangaNavigation() {
-      const mangaItems = allProducts.filter(p => p.category === 'مانجا');
-      const sortedManga = sortProducts(mangaItems);
-      const totalPages = Math.ceil(sortedManga.length / mangaItemsPerPage);
-      const prevButton = document.getElementById('prev-manga');
-      const nextButton = document.getElementById('next-manga');
-      
-      prevButton.disabled = currentMangaPage === 0;
-      nextButton.disabled = currentMangaPage === totalPages - 1;
+        const mangaItems = allProducts.filter(p => p.category === 'مانجا');
+        const sortedManga = sortProducts(mangaItems);
+        const totalPages = Math.ceil(sortedManga.length / mangaItemsPerPage);
+        const prevButton = document.getElementById('prev-manga');
+        const nextButton = document.getElementById('next-manga');
+        
+        if (prevButton) prevButton.disabled = currentMangaPage === 0;
+        if (nextButton) nextButton.disabled = currentMangaPage === totalPages - 1;
     }
 
     // ====== إدارة التقسيم للروايات ======
     function initializeNovels() {
-      // تصنيف 16+
-      const novels16 = allProducts.filter(p => p.category === 'روايات' && p.ratingCategory === '16');
-      const sortedNovels16 = sortProducts(novels16);
-      novelPages['16'].items = sortedNovels16;
-      novelPages['16'].total = Math.ceil(sortedNovels16.length / novelsPerPage);
-      showNovelPage('16', 0);
-      
-      // تصنيف 18+
-      const novels18 = allProducts.filter(p => p.category === 'روايات' && p.ratingCategory === '18');
-      const sortedNovels18 = sortProducts(novels18);
-      novelPages['18'].items = sortedNovels18;
-      novelPages['18'].total = Math.ceil(sortedNovels18.length / novelsPerPage);
-      showNovelPage('18', 0);
-      
-      // جميع الأعمار
-      const novelsAll = allProducts.filter(p => p.category === 'روايات' && p.ratingCategory === 'all');
-      const sortedNovelsAll = sortProducts(novelsAll);
-      novelPages['all'].items = sortedNovelsAll;
-      novelPages['all'].total = Math.ceil(sortedNovelsAll.length / novelsPerPage);
-      showNovelPage('all', 0);
+        // تصنيف 16+
+        const novels16 = allProducts.filter(p => p.category === 'روايات' && p.ratingCategory === '16');
+        const sortedNovels16 = sortProducts(novels16);
+        novelPages['16'].items = sortedNovels16;
+        novelPages['16'].total = Math.ceil(sortedNovels16.length / novelsPerPage);
+        showNovelPage('16', 0);
+        
+        // تصنيف 18+
+        const novels18 = allProducts.filter(p => p.category === 'روايات' && p.ratingCategory === '18');
+        const sortedNovels18 = sortProducts(novels18);
+        novelPages['18'].items = sortedNovels18;
+        novelPages['18'].total = Math.ceil(sortedNovels18.length / novelsPerPage);
+        showNovelPage('18', 0);
+        
+        // جميع الأعمار
+        const novelsAll = allProducts.filter(p => p.category === 'روايات' && p.ratingCategory === 'all');
+        const sortedNovelsAll = sortProducts(novelsAll);
+        novelPages['all'].items = sortedNovelsAll;
+        novelPages['all'].total = Math.ceil(sortedNovelsAll.length / novelsPerPage);
+        showNovelPage('all', 0);
     }
     
     function showNovelPage(category, page) {
-      novelPages[category].current = page;
-      const items = novelPages[category].items;
-      const startIndex = page * novelsPerPage;
-      const endIndex = startIndex + novelsPerPage;
-      const itemsToShow = items.slice(startIndex, endIndex);
-      
-      const container = document.getElementById(`novels-${category}`);
-      container.innerHTML = '';
-      
-      itemsToShow.forEach(product => {
-        const card = createProductCard(product);
-        container.appendChild(card);
-      });
-      
-      // تحديث المعلومات
-      document.getElementById(`novels-${category}-current-page`).textContent = page + 1;
-      document.getElementById(`novels-${category}-total-pages`).textContent = novelPages[category].total;
-      
-      // إظهار/إخفاء أزرار التنقل
-      const nav = document.getElementById(`novels-${category}-navigation`);
-      if (novelPages[category].total > 1) {
-        nav.style.display = 'flex';
-      } else {
-        nav.style.display = 'none';
-      }
+        novelPages[category].current = page;
+        const items = novelPages[category].items;
+        const startIndex = page * novelsPerPage;
+        const endIndex = startIndex + novelsPerPage;
+        const itemsToShow = items.slice(startIndex, endIndex);
+        
+        const container = document.getElementById(`novels-${category}`);
+        if (container) {
+            container.innerHTML = '';
+            
+            itemsToShow.forEach(product => {
+                const card = createProductCard(product);
+                container.appendChild(card);
+            });
+            
+            // تحديث المعلومات
+            const currentPageEl = document.getElementById(`novels-${category}-current-page`);
+            const totalPagesEl = document.getElementById(`novels-${category}-total-pages`);
+            if (currentPageEl) currentPageEl.textContent = page + 1;
+            if (totalPagesEl) totalPagesEl.textContent = novelPages[category].total;
+            
+            // إظهار/إخفاء أزرار التنقل
+            const nav = document.getElementById(`novels-${category}-navigation`);
+            if (nav) {
+                if (novelPages[category].total > 1) {
+                    nav.style.display = 'flex';
+                } else {
+                    nav.style.display = 'none';
+                }
+            }
+        }
     }
     
     function prevNovelPage(category) {
-      if (novelPages[category].current > 0) {
-        showNovelPage(category, novelPages[category].current - 1);
-      }
+        if (novelPages[category].current > 0) {
+            showNovelPage(category, novelPages[category].current - 1);
+        }
     }
     
     function nextNovelPage(category) {
-      if (novelPages[category].current < novelPages[category].total - 1) {
-        showNovelPage(category, novelPages[category].current + 1);
-      }
+        if (novelPages[category].current < novelPages[category].total - 1) {
+            showNovelPage(category, novelPages[category].current + 1);
+        }
     }
     
     function switchNovelTab(index) {
-      const tabs = document.querySelectorAll('.tabs .tab');
-      const contents = document.querySelectorAll('.tab-content');
-      
-      tabs.forEach(tab => tab.classList.remove('active'));
-      contents.forEach(content => content.classList.remove('active'));
-      
-      tabs[index].classList.add('active');
-      contents[index].classList.add('active');
-      
-      // إعادة تعيين إلى الصفحة الأولى عند التبديل
-      const categories = ['16', '18', 'all'];
-      const currentCategory = categories[index];
-      if (novelPages[currentCategory].items.length > 0) {
-        showNovelPage(currentCategory, 0);
-      }
+        const tabs = document.querySelectorAll('.tabs .tab');
+        const contents = document.querySelectorAll('.tab-content');
+        
+        tabs.forEach(tab => tab.classList.remove('active'));
+        contents.forEach(content => content.classList.remove('active'));
+        
+        tabs[index].classList.add('active');
+        contents[index].classList.add('active');
+        
+        // إعادة تعيين إلى الصفحة الأولى عند التبديل
+        const categories = ['16', '18', 'all'];
+        const currentCategory = categories[index];
+        if (novelPages[currentCategory].items.length > 0) {
+            showNovelPage(currentCategory, 0);
+        }
     }
 
     // ====== إدارة التقسيم للفيديوهات ======
     function initializeVideos() {
-      // خيال سحري
-      const fantasyVideos = allProducts.filter(p => p.category === 'فيديوهات' && p.subcategory === 'الخيال السحري');
-      const sortedFantasy = sortProducts(fantasyVideos);
-      videoPages['fantasy'].items = sortedFantasy;
-      videoPages['fantasy'].total = Math.ceil(sortedFantasy.length / videosPerPage);
-      showVideoPage('fantasy', 0);
-      
-      // رعب
-      const horrorVideos = allProducts.filter(p => p.category === 'فيديوهات' && p.subcategory === 'الرعب');
-      const sortedHorror = sortProducts(horrorVideos);
-      videoPages['horror'].items = sortedHorror;
-      videoPages['horror'].total = Math.ceil(sortedHorror.length / videosPerPage);
-      showVideoPage('horror', 0);
-      
-      // غموض
-      const mysteryVideos = allProducts.filter(p => p.category === 'فيديوهات' && p.subcategory === 'الغموض');
-      const sortedMystery = sortProducts(mysteryVideos);
-      videoPages['mystery'].items = sortedMystery;
-      videoPages['mystery'].total = Math.ceil(sortedMystery.length / videosPerPage);
-      showVideoPage('mystery', 0);
-      
-      // سخرية
-      const comedyVideos = allProducts.filter(p => p.category === 'فيديوهات' && p.subcategory === 'السخرية');
-      const sortedComedy = sortProducts(comedyVideos);
-      videoPages['comedy'].items = sortedComedy;
-      videoPages['comedy'].total = Math.ceil(sortedComedy.length / videosPerPage);
-      showVideoPage('comedy', 0);
-      
-      // مغامرة
-      const adventureVideos = allProducts.filter(p => p.category === 'فيديوهات' && p.subcategory === 'المغامرة');
-      const sortedAdventure = sortProducts(adventureVideos);
-      videoPages['adventure'].items = sortedAdventure;
-      videoPages['adventure'].total = Math.ceil(sortedAdventure.length / videosPerPage);
-      showVideoPage('adventure', 0);
+        // خيال سحري
+        const fantasyVideos = allProducts.filter(p => p.category === 'فيديوهات' && p.subcategory === 'الخيال السحري');
+        const sortedFantasy = sortProducts(fantasyVideos);
+        videoPages['fantasy'].items = sortedFantasy;
+        videoPages['fantasy'].total = Math.ceil(sortedFantasy.length / videosPerPage);
+        showVideoPage('fantasy', 0);
+        
+        // رعب
+        const horrorVideos = allProducts.filter(p => p.category === 'فيديوهات' && p.subcategory === 'الرعب');
+        const sortedHorror = sortProducts(horrorVideos);
+        videoPages['horror'].items = sortedHorror;
+        videoPages['horror'].total = Math.ceil(sortedHorror.length / videosPerPage);
+        showVideoPage('horror', 0);
+        
+        // غموض
+        const mysteryVideos = allProducts.filter(p => p.category === 'فيديوهات' && p.subcategory === 'الغموض');
+        const sortedMystery = sortProducts(mysteryVideos);
+        videoPages['mystery'].items = sortedMystery;
+        videoPages['mystery'].total = Math.ceil(sortedMystery.length / videosPerPage);
+        showVideoPage('mystery', 0);
+        
+        // سخرية
+        const comedyVideos = allProducts.filter(p => p.category === 'فيديوهات' && p.subcategory === 'السخرية');
+        const sortedComedy = sortProducts(comedyVideos);
+        videoPages['comedy'].items = sortedComedy;
+        videoPages['comedy'].total = Math.ceil(sortedComedy.length / videosPerPage);
+        showVideoPage('comedy', 0);
+        
+        // مغامرة
+        const adventureVideos = allProducts.filter(p => p.category === 'فيديوهات' && p.subcategory === 'المغامرة');
+        const sortedAdventure = sortProducts(adventureVideos);
+        videoPages['adventure'].items = sortedAdventure;
+        videoPages['adventure'].total = Math.ceil(sortedAdventure.length / videosPerPage);
+        showVideoPage('adventure', 0);
     }
     
     function showVideoPage(category, page) {
-      videoPages[category].current = page;
-      const items = videoPages[category].items;
-      const startIndex = page * videosPerPage;
-      const endIndex = startIndex + videosPerPage;
-      const itemsToShow = items.slice(startIndex, endIndex);
-      
-      const container = document.getElementById(`${category}-videos`);
-      container.innerHTML = '';
-      
-      itemsToShow.forEach(product => {
-        const card = document.createElement('div');
-        card.className = 'video-card';
-        card.onclick = () => openProductDetail(product.id);
-        card.innerHTML = `
-          <div class="video-player">
-            <img src="${product.image}" alt="${product.title}" style="width: 100%; height: 100%; object-fit: cover;">
-          </div>
-          <div class="video-info">
-            <div class="video-title rtl-text">${product.title}</div>
-            <div class="video-title ltr-text" style="display: none;">${product.titleEn}</div>
-            <div class="video-duration">
-              <i class="far fa-clock"></i>
-              ${product.chapters ? product.chapters.reduce((sum, ch) => sum + parseInt(ch.duration), 0) : '60'} دقيقة
-            </div>
-          </div>
-        `;
-        container.appendChild(card);
-      });
-      
-      // تحديث المعلومات
-      document.getElementById(`${category}-current-page`).textContent = page + 1;
-      document.getElementById(`${category}-total-pages`).textContent = videoPages[category].total;
-      
-      // إظهار/إخفاء أزرار التنقل
-      const nav = document.getElementById(`${category}-navigation`);
-      if (videoPages[category].total > 1) {
-        nav.style.display = 'flex';
-      } else {
-        nav.style.display = 'none';
-      }
+        videoPages[category].current = page;
+        const items = videoPages[category].items;
+        const startIndex = page * videosPerPage;
+        const endIndex = startIndex + videosPerPage;
+        const itemsToShow = items.slice(startIndex, endIndex);
+        
+        const container = document.getElementById(`${category}-videos`);
+        if (container) {
+            container.innerHTML = '';
+            
+            itemsToShow.forEach(product => {
+                const card = document.createElement('div');
+                card.className = 'video-card';
+                card.onclick = () => openProductDetail(product.id);
+                card.innerHTML = `
+                    <div class="video-player">
+                        <img src="${getProductImage(product)}" alt="${product.title}" style="width: 100%; height: 100%; object-fit: cover;">
+                    </div>
+                    <div class="video-info">
+                        <div class="video-title rtl-text">${product.title}</div>
+                        <div class="video-title ltr-text" style="display: none;">${product.titleEn}</div>
+                        <div class="video-duration">
+                            <i class="far fa-clock"></i>
+                            ${product.chapters ? product.chapters.reduce((sum, ch) => sum + parseInt(ch.duration), 0) : '60'} دقيقة
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+            
+            // تحديث المعلومات
+            const currentPageEl = document.getElementById(`${category}-current-page`);
+            const totalPagesEl = document.getElementById(`${category}-total-pages`);
+            if (currentPageEl) currentPageEl.textContent = page + 1;
+            if (totalPagesEl) totalPagesEl.textContent = videoPages[category].total;
+            
+            // إظهار/إخفاء أزرار التنقل
+            const nav = document.getElementById(`${category}-navigation`);
+            if (nav) {
+                if (videoPages[category].total > 1) {
+                    nav.style.display = 'flex';
+                } else {
+                    nav.style.display = 'none';
+                }
+            }
+        }
     }
     
     function prevVideoPage(category) {
-      if (videoPages[category].current > 0) {
-        showVideoPage(category, videoPages[category].current - 1);
-      }
+        if (videoPages[category].current > 0) {
+            showVideoPage(category, videoPages[category].current - 1);
+        }
     }
     
     function nextVideoPage(category) {
-      if (videoPages[category].current < videoPages[category].total - 1) {
-        showVideoPage(category, videoPages[category].current + 1);
-      }
+        if (videoPages[category].current < videoPages[category].total - 1) {
+            showVideoPage(category, videoPages[category].current + 1);
+        }
     }
     
     function switchVideoTab(index) {
-      const tabs = document.querySelectorAll('.video-tab');
-      const contents = document.querySelectorAll('.video-tab-content');
-      
-      tabs.forEach(tab => tab.classList.remove('active'));
-      contents.forEach(content => content.classList.remove('active'));
-      
-      tabs[index].classList.add('active');
-      contents[index].classList.add('active');
-      
-      // إعادة تعيين إلى الصفحة الأولى عند التبديل
-      const categories = ['fantasy', 'horror', 'mystery', 'comedy', 'adventure'];
-      const currentCategory = categories[index];
-      if (videoPages[currentCategory].items.length > 0) {
-        showVideoPage(currentCategory, 0);
-      }
+        const tabs = document.querySelectorAll('.video-tab');
+        const contents = document.querySelectorAll('.video-tab-content');
+        
+        tabs.forEach(tab => tab.classList.remove('active'));
+        contents.forEach(content => content.classList.remove('active'));
+        
+        tabs[index].classList.add('active');
+        contents[index].classList.add('active');
+        
+        // إعادة تعيين إلى الصفحة الأولى عند التبديل
+        const categories = ['fantasy', 'horror', 'mystery', 'comedy', 'adventure'];
+        const currentCategory = categories[index];
+        if (videoPages[currentCategory].items.length > 0) {
+            showVideoPage(currentCategory, 0);
+        }
     }
 
-    // ====== إنشاء بطاقة المنتج ======
+    // ====== إنشاء بطاقة المنتج مع دعم Base64 ======
     function createProductCard(product) {
-      const card = document.createElement('div');
-      card.className = 'product-card';
-      card.onclick = () => openProductDetail(product.id);
-      card.innerHTML = `
-        <img src="${product.image}" alt="${product.title}" class="card-image">
-        <div class="card-content">
-          <h3 class="card-title rtl-text">${product.title}</h3>
-          <h3 class="card-title ltr-text" style="display: none;">${product.titleEn}</h3>
-          <div class="card-category">
-            <i class="fas fa-tag"></i>
-            <span class="rtl-text">${product.subcategory}</span>
-            <span class="ltr-text" style="display: none;">${product.subcategoryEn}</span>
-          </div>
-          <p class="card-description rtl-text">${product.description.substring(0, 80)}...</p>
-          <p class="card-description ltr-text" style="display: none;">${product.descriptionEn.substring(0, 80)}...</p>
-          <div class="card-footer">
-            <span class="card-price">${product.price}</span>
-            <button class="card-button" onclick="addToCart('${product.id}', event)">
-              <i class="fas fa-cart-plus"></i>
-              <span class="rtl-text">شراء</span>
-              <span class="ltr-text" style="display: none;">Buy</span>
-            </button>
-          </div>
-        </div>
-      `;
-      return card;
+        const card = document.createElement('div');
+        card.className = 'product-card';
+        card.onclick = () => openProductDetail(product.id);
+        card.innerHTML = `
+            <img src="${getProductImage(product)}" alt="${product.title}" class="card-image">
+            <div class="card-content">
+                <h3 class="card-title rtl-text">${product.title}</h3>
+                <h3 class="card-title ltr-text" style="display: none;">${product.titleEn}</h3>
+                <div class="card-category">
+                    <i class="fas fa-tag"></i>
+                    <span class="rtl-text">${product.subcategory}</span>
+                    <span class="ltr-text" style="display: none;">${product.subcategoryEn}</span>
+                </div>
+                <p class="card-description rtl-text">${product.description.substring(0, 80)}...</p>
+                <p class="card-description ltr-text" style="display: none;">${product.descriptionEn.substring(0, 80)}...</p>
+                <div class="card-footer">
+                    <span class="card-price">${product.price}</span>
+                    <button class="card-button" onclick="addToCart('${product.id}', event)">
+                        <i class="fas fa-cart-plus"></i>
+                        <span class="rtl-text">شراء</span>
+                        <span class="ltr-text" style="display: none;">Buy</span>
+                    </button>
+                </div>
+            </div>
+        `;
+        return card;
     }
 
     // ====== عرض جميع المحتوى ======
     function renderAllContent() {
-      // قصص
-      const storiesContainer = document.getElementById('stories-container');
-      storiesContainer.innerHTML = '';
-      const stories = allProducts.filter(p => p.category === 'قصص');
-      const sortedStories = sortProducts(stories);
-      sortedStories.forEach(product => {
-        const card = createProductCard(product);
-        storiesContainer.appendChild(card);
-      });
-      
-      // تهيئة باقي المحتوى
-      initializeMangaNavigation();
-      initializeVideos();
-      initializeNovels();
+        // قصص
+        const storiesContainer = document.getElementById('stories-container');
+        if (storiesContainer) {
+            storiesContainer.innerHTML = '';
+            const stories = allProducts.filter(p => p.category === 'قصص');
+            const sortedStories = sortProducts(stories);
+            sortedStories.forEach(product => {
+                const card = createProductCard(product);
+                storiesContainer.appendChild(card);
+            });
+        }
+        
+        // تهيئة باقي المحتوى
+        initializeMangaNavigation();
+        initializeVideos();
+        initializeNovels();
+    }
+
+    // ====== دالة مساعدة لتنسيق التاريخ ======
+    function formatCommentDate(dateString) {
+        if (!dateString) return currentLanguage === 'ar' ? 'تاريخ غير معروف' : 'Unknown date';
+        
+        try {
+            const date = new Date(dateString);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMs / 3600000);
+            const diffDays = Math.floor(diffMs / 86400000);
+            
+            if (currentLanguage === 'ar') {
+                if (diffMins < 1) return 'الآن';
+                if (diffMins < 60) return `قبل ${diffMins} دقيقة`;
+                if (diffHours < 24) return `قبل ${diffHours} ساعة`;
+                if (diffDays === 1) return 'أمس';
+                if (diffDays < 7) return `قبل ${diffDays} يوم`;
+                return date.toLocaleDateString('ar-SA', { 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                });
+            } else {
+                if (diffMins < 1) return 'Just now';
+                if (diffMins < 60) return `${diffMins} mins ago`;
+                if (diffHours < 24) return `${diffHours} hours ago`;
+                if (diffDays === 1) return 'Yesterday';
+                if (diffDays < 7) return `${diffDays} days ago`;
+                return date.toLocaleDateString('en-US', { 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                });
+            }
+        } catch (error) {
+            console.error('Error formatting date:', error);
+            return dateString;
+        }
     }
 
     // ====== لوحة تفاصيل المنتج ======
     async function openProductDetail(productId) {
-      const product = allProducts.find(p => p.id === productId);
-      if (!product) return;
-      
-      currentProductId = productId;
-      
-      // تعيين البيانات الأساسية
-      document.getElementById('product-detail-title').textContent = product.title;
-      document.getElementById('product-detail-title-en').textContent = product.titleEn;
-      document.getElementById('product-detail-poster').src = product.image;
-      document.getElementById('product-detail-category').textContent = product.subcategory;
-      document.getElementById('product-detail-category-en').textContent = product.subcategoryEn;
-      document.getElementById('product-detail-price').textContent = product.price;
-      document.getElementById('product-detail-description').textContent = product.description;
-      document.getElementById('product-detail-description-en').textContent = product.descriptionEn;
-      document.getElementById('product-detail-name').textContent = product.title;
-      document.getElementById('product-detail-name-en').textContent = product.titleEn;
-      document.getElementById('product-detail-type').textContent = `${product.type} - ${product.subcategory}`;
-      document.getElementById('product-detail-type-en').textContent = `${product.typeEn} - ${product.subcategoryEn}`;
-      
-      // تحديث التقييم
-      updateRatingStars(product.rating);
-      
-      // إضافة قسم معلومات المنتج
-      const summarySection = document.getElementById('product-summary-section');
-      summarySection.innerHTML = `
-        <div class="product-detail-summary">
-          <h3 class="section-label">
-            <i class="fas fa-info-circle"></i>
-            <span class="rtl-text">معلومات المنتج</span>
-            <span class="ltr-text" style="display: none;">Product Information</span>
-          </h3>
-          <div class="product-detail-summary-grid">
-            <div class="summary-item">
-              <i class="fas fa-tag"></i>
-              <div>
-                <div class="summary-label rtl-text">الفئة</div>
-                <div class="summary-label ltr-text" style="display: none;">Category</div>
-                <div class="summary-value rtl-text">${product.category}</div>
-                <div class="summary-value ltr-text" style="display: none;">${product.categoryEn}</div>
-              </div>
-            </div>
-            
-            <div class="summary-item">
-              <i class="fas fa-layer-group"></i>
-              <div>
-                <div class="summary-label rtl-text">النوع</div>
-                <div class="summary-label ltr-text" style="display: none;">Type</div>
-                <div class="summary-value rtl-text">${product.type}</div>
-                <div class="summary-value ltr-text" style="display: none;">${product.typeEn}</div>
-              </div>
-            </div>
-            
-            <div class="summary-item">
-              <i class="fas fa-dollar-sign"></i>
-              <div>
-                <div class="summary-label rtl-text">السعر</div>
-                <div class="summary-label ltr-text" style="display: none;">Price</div>
-                <div class="summary-value">${product.price}</div>
-              </div>
-            </div>
-            
-            <div class="summary-item">
-              <i class="fas fa-box"></i>
-              <div>
-                <div class="summary-label rtl-text">التنسيق</div>
-                <div class="summary-label ltr-text" style="display: none;">Format</div>
-                <div class="summary-value rtl-text">${product.format}</div>
-                <div class="summary-value ltr-text" style="display: none;">${product.formatEn}</div>
-              </div>
-            </div>
-            
-            <div class="summary-item">
-              <i class="fas fa-star"></i>
-              <div>
-                <div class="summary-label rtl-text">التقييم</div>
-                <div class="summary-label ltr-text" style="display: none;">Rating</div>
-                <div class="summary-value">${product.rating}/5</div>
-              </div>
-            </div>
-            
-            <div class="summary-item">
-              <i class="fas fa-calendar-alt"></i>
-              <div>
-                <div class="summary-label rtl-text">التصنيف العمري</div>
-                <div class="summary-label ltr-text" style="display: none;">Age Rating</div>
-                <div class="summary-value rtl-text">${product.ratingCategory === 'all' ? 'جميع الأعمار' : product.ratingCategory + '+'}</div>
-                <div class="summary-value ltr-text" style="display: none;">${product.ratingCategory === 'all' ? 'All Ages' : product.ratingCategory + '+'}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      `;
-      
-      // تحديث العناصر بناءً على اللغة
-      updateLanguageElements();
-      
-      // إظهار/إخفاء قسم الأجزاء (للفيديوهات فقط)
-      const chaptersSection = document.getElementById('chapters-section');
-      if (product.chapters && product.chapters.length > 0) {
-        chaptersSection.style.display = 'block';
-        const chaptersContainer = document.getElementById('product-chapters');
-        chaptersContainer.innerHTML = '';
-        product.chapters.forEach(chapter => {
-          const chapterElement = document.createElement('div');
-          chapterElement.className = 'chapter-item';
-          chapterElement.innerHTML = `
-            <div class="chapter-info">
-              <h4>${chapter.title}</h4>
-              <div class="chapter-duration">
-                <i class="far fa-clock"></i> ${chapter.duration}
-              </div>
-            </div>
-            <button class="watch-button" onclick="watchChapter('${chapter.id}')">
-              <i class="fas fa-play"></i>
-              <span class="rtl-text">مشاهدة</span>
-              <span class="ltr-text" style="display: none;">Watch</span>
-            </button>
-          `;
-          chaptersContainer.appendChild(chapterElement);
-        });
-      } else {
-        chaptersSection.style.display = 'none';
-      }
-      
-      // تحميل التعليقات من Firebase
-      await loadCommentsFromFirebase(productId);
-      
-      // إظهار اللوحة
-      document.getElementById('product-detail-overlay').style.display = 'block';
-      document.body.style.overflow = 'hidden';
+        const product = allProducts.find(p => p.id === productId);
+        if (!product) return;
+        
+        currentProductId = productId;
+        
+        // تعيين البيانات الأساسية
+        document.getElementById('product-detail-title').textContent = product.title;
+        document.getElementById('product-detail-title-en').textContent = product.titleEn;
+        document.getElementById('product-detail-poster').src = getProductImage(product);
+        document.getElementById('product-detail-category').textContent = product.subcategory;
+        document.getElementById('product-detail-category-en').textContent = product.subcategoryEn;
+        document.getElementById('product-detail-price').textContent = product.price;
+        document.getElementById('product-detail-description').textContent = product.description;
+        document.getElementById('product-detail-description-en').textContent = product.descriptionEn;
+        document.getElementById('product-detail-name').textContent = product.title;
+        document.getElementById('product-detail-name-en').textContent = product.titleEn;
+        document.getElementById('product-detail-type').textContent = `${product.type} - ${product.subcategory}`;
+        document.getElementById('product-detail-type-en').textContent = `${product.typeEn} - ${product.subcategoryEn}`;
+        
+        // تحديث التقييم
+        updateRatingStars(product.rating);
+        
+        // إضافة قسم معلومات المنتج
+        const summarySection = document.getElementById('product-summary-section');
+        if (summarySection) {
+            summarySection.innerHTML = `
+                <div class="product-detail-summary">
+                    <h3 class="section-label">
+                        <i class="fas fa-info-circle"></i>
+                        <span class="rtl-text">معلومات المنتج</span>
+                        <span class="ltr-text" style="display: none;">Product Information</span>
+                    </h3>
+                    <div class="product-detail-summary-grid">
+                        <div class="summary-item">
+                            <i class="fas fa-tag"></i>
+                            <div>
+                                <div class="summary-label rtl-text">الفئة</div>
+                                <div class="summary-label ltr-text" style="display: none;">Category</div>
+                                <div class="summary-value rtl-text">${product.category}</div>
+                                <div class="summary-value ltr-text" style="display: none;">${product.categoryEn}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="summary-item">
+                            <i class="fas fa-layer-group"></i>
+                            <div>
+                                <div class="summary-label rtl-text">النوع</div>
+                                <div class="summary-label ltr-text" style="display: none;">Type</div>
+                                <div class="summary-value rtl-text">${product.type}</div>
+                                <div class="summary-value ltr-text" style="display: none;">${product.typeEn}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="summary-item">
+                            <i class="fas fa-dollar-sign"></i>
+                            <div>
+                                <div class="summary-label rtl-text">السعر</div>
+                                <div class="summary-label ltr-text" style="display: none;">Price</div>
+                                <div class="summary-value">${product.price}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="summary-item">
+                            <i class="fas fa-box"></i>
+                            <div>
+                                <div class="summary-label rtl-text">التنسيق</div>
+                                <div class="summary-label ltr-text" style="display: none;">Format</div>
+                                <div class="summary-value rtl-text">${product.format}</div>
+                                <div class="summary-value ltr-text" style="display: none;">${product.formatEn}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="summary-item">
+                            <i class="fas fa-star"></i>
+                            <div>
+                                <div class="summary-label rtl-text">التقييم</div>
+                                <div class="summary-label ltr-text" style="display: none;">Rating</div>
+                                <div class="summary-value">${product.rating}/5</div>
+                            </div>
+                        </div>
+                        
+                        <div class="summary-item">
+                            <i class="fas fa-calendar-alt"></i>
+                            <div>
+                                <div class="summary-label rtl-text">التصنيف العمري</div>
+                                <div class="summary-label ltr-text" style="display: none;">Age Rating</div>
+                                <div class="summary-value rtl-text">${product.ratingCategory === 'all' ? 'جميع الأعمار' : product.ratingCategory + '+'}</div>
+                                <div class="summary-value ltr-text" style="display: none;">${product.ratingCategory === 'all' ? 'All Ages' : product.ratingCategory + '+'}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // تحديث العناصر بناءً على اللغة
+        updateLanguageElements();
+        
+        // إظهار/إخفاء قسم الأجزاء (للفيديوهات فقط)
+        const chaptersSection = document.getElementById('chapters-section');
+        if (chaptersSection) {
+            if (product.chapters && product.chapters.length > 0) {
+                chaptersSection.style.display = 'block';
+                const chaptersContainer = document.getElementById('product-chapters');
+                if (chaptersContainer) {
+                    chaptersContainer.innerHTML = '';
+                    product.chapters.forEach(chapter => {
+                        const chapterElement = document.createElement('div');
+                        chapterElement.className = 'chapter-item';
+                        chapterElement.innerHTML = `
+                            <div class="chapter-info">
+                                <h4>${chapter.title}</h4>
+                                <div class="chapter-duration">
+                                    <i class="far fa-clock"></i> ${chapter.duration}
+                                </div>
+                            </div>
+                            <button class="watch-button" onclick="watchChapter('${chapter.id}')">
+                                <i class="fas fa-play"></i>
+                                <span class="rtl-text">مشاهدة</span>
+                                <span class="ltr-text" style="display: none;">Watch</span>
+                            </button>
+                        `;
+                        chaptersContainer.appendChild(chapterElement);
+                    });
+                }
+            } else {
+                chaptersSection.style.display = 'none';
+            }
+        }
+        
+        // إنشاء قسم التعليقات
+        const commentsSection = document.getElementById('comments-section');
+        if (commentsSection) {
+            commentsSection.innerHTML = `
+                <div class="section-header">
+                    <h3 id="comments-count" class="section-label">
+                        <i class="fas fa-comments"></i>
+                        <span class="rtl-text">التعليقات (0)</span>
+                        <span class="ltr-text" style="display: none;">Comments (0)</span>
+                    </h3>
+                </div>
+                
+                <div class="comment-form">
+                    <div class="comment-input-container">
+                        <textarea 
+                            id="product-comment-input" 
+                            class="comment-input" 
+                            placeholder="${currentLanguage === 'ar' ? 'اكتب تعليقك هنا...' : 'Write your comment here...'}"
+                            rows="3"
+                        ></textarea>
+                        <button class="comment-submit-btn" onclick="addProductComment()">
+                            <i class="fas fa-paper-plane"></i>
+                            <span class="rtl-text">إرسال</span>
+                            <span class="ltr-text" style="display: none;">Send</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="product-comments" class="comments-list">
+                    <!-- التعليقات سيتم تحميلها هنا -->
+                </div>
+            `;
+        }
+        
+        // تحميل التعليقات من Firebase
+        await loadCommentsFromFirebase(productId);
+        
+        // إظهار اللوحة
+        document.getElementById('product-detail-overlay').style.display = 'block';
+        document.body.style.overflow = 'hidden';
+        
+        // تحديث العناصر بناءً على اللغة
+        updateLanguageElements();
     }
     
     function closeProductDetail() {
-      document.getElementById('product-detail-overlay').style.display = 'none';
-      document.body.style.overflow = 'auto';
-      currentProductId = null;
+        document.getElementById('product-detail-overlay').style.display = 'none';
+        document.body.style.overflow = 'auto';
+        currentProductId = null;
     }
     
     function updateRatingStars(rating) {
-      const starsContainer = document.getElementById('product-detail-stars');
-      starsContainer.innerHTML = '';
-      
-      const fullStars = Math.floor(rating);
-      const hasHalfStar = rating % 1 >= 0.5;
-      
-      for (let i = 0; i < fullStars; i++) {
-        const star = document.createElement('i');
-        star.className = 'fas fa-star';
-        starsContainer.appendChild(star);
-      }
-      
-      if (hasHalfStar) {
-        const halfStar = document.createElement('i');
-        halfStar.className = 'fas fa-star-half-alt';
-        starsContainer.appendChild(halfStar);
-      }
-      
-      const emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0);
-      for (let i = 0; i < emptyStars; i++) {
-        const emptyStar = document.createElement('i');
-        emptyStar.className = 'far fa-star';
-        starsContainer.appendChild(emptyStar);
-      }
-      
-      document.getElementById('product-detail-rating').textContent = `${rating}/5`;
+        const starsContainer = document.getElementById('product-detail-stars');
+        if (starsContainer) {
+            starsContainer.innerHTML = '';
+            
+            const fullStars = Math.floor(rating);
+            const hasHalfStar = rating % 1 >= 0.5;
+            
+            for (let i = 0; i < fullStars; i++) {
+                const star = document.createElement('i');
+                star.className = 'fas fa-star';
+                starsContainer.appendChild(star);
+            }
+            
+            if (hasHalfStar) {
+                const halfStar = document.createElement('i');
+                halfStar.className = 'fas fa-star-half-alt';
+                starsContainer.appendChild(halfStar);
+            }
+            
+            const emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0);
+            for (let i = 0; i < emptyStars; i++) {
+                const emptyStar = document.createElement('i');
+                emptyStar.className = 'far fa-star';
+                starsContainer.appendChild(emptyStar);
+            }
+            
+            document.getElementById('product-detail-rating').textContent = `${rating}/5`;
+        }
     }
     
     function watchChapter(chapterId) {
-      alert(currentLanguage === 'ar' ? 
-        `جاري تشغيل الفصل: ${chapterId}` : 
-        `Playing chapter: ${chapterId}`);
+        alert(currentLanguage === 'ar' ? 
+            `جاري تشغيل الفصل: ${chapterId}` : 
+            `Playing chapter: ${chapterId}`);
     }
     
     // ====== إضافة تعليق مع Firebase ======
     async function addProductComment() {
-      const user = checkAuthBeforeComment();
-      if (!user) return;
-      
-      const input = document.getElementById('product-comment-input');
-      const text = input.value.trim();
-      
-      if (!text) {
-        alert(currentLanguage === 'ar' ? 'الرجاء كتابة تعليق' : 'Please write a comment');
-        return;
-      }
-      
-      if (!currentProductId) {
-        showNotification(currentLanguage === 'ar' ? 
-          'لم يتم تحديد منتج' : 
-          'No product selected');
-        return;
-      }
-      
-      try {
-        // حفظ التعليق في Firebase
-        const db = window.firebaseDatabase;
-        const commentsRef = window.firebase.ref(db, 'comments/' + currentProductId);
-        const newCommentRef = window.firebase.push(commentsRef);
+        const user = checkAuthBeforeComment();
+        if (!user) return;
         
-        const commentData = {
-          author: user.username || user.email,
-          authorId: user.uid,
-          text: text,
-          date: new Date().toISOString(),
-          productId: currentProductId,
-          productTitle: allProducts.find(p => p.id === currentProductId)?.title || 'Unknown'
-        };
+        const input = document.getElementById('product-comment-input');
+        const text = input.value.trim();
         
-        await window.firebase.set(newCommentRef, commentData);
+        if (!text) {
+            showNotification(currentLanguage === 'ar' ? 
+                'الرجاء كتابة تعليق' : 
+                'Please write a comment');
+            return;
+        }
         
-        // إضافة التعليق إلى الواجهة مباشرة
-        const commentsContainer = document.getElementById('product-comments');
-        const commentElement = document.createElement('div');
-        commentElement.className = 'comment-item';
-        commentElement.innerHTML = `
-          <div class="comment-header">
-            <span class="comment-author">${commentData.author}</span>
-            <span class="comment-date">${new Date(commentData.date).toLocaleDateString('ar-SA')}</span>
-          </div>
-          <p class="comment-text">${commentData.text}</p>
-        `;
-        commentsContainer.prepend(commentElement);
+        if (!currentProductId) {
+            showNotification(currentLanguage === 'ar' ? 
+                'لم يتم تحديد منتج' : 
+                'No product selected');
+            return;
+        }
         
-        input.value = '';
-        showNotification(currentLanguage === 'ar' ? 
-          'تمت إضافة تعليقك بنجاح' : 
-          'Your comment has been added successfully');
-          
-      } catch (error) {
-        console.error('Error adding comment:', error);
-        showNotification(currentLanguage === 'ar' ? 
-          'حدث خطأ أثناء إضافة التعليق' : 
-          'Error adding comment');
-      }
+        try {
+            // إنشاء مرجع للتعليقات
+            const commentsRef = ref(database, 'comments/' + currentProductId);
+            const newCommentRef = push(commentsRef);
+            
+            const commentData = {
+                author: user.username || user.email.split('@')[0],
+                authorId: user.uid,
+                text: text,
+                date: new Date().toISOString(),
+                productId: currentProductId,
+                productTitle: allProducts.find(p => p.id === currentProductId)?.title || 'Unknown',
+                timestamp: Date.now()
+            };
+            
+            await set(newCommentRef, commentData);
+            
+            // إضافة التعليق إلى الواجهة مباشرة
+            const commentsContainer = document.getElementById('product-comments');
+            if (commentsContainer) {
+                const commentElement = document.createElement('div');
+                commentElement.className = 'comment-item';
+                commentElement.innerHTML = `
+                    <div class="comment-header">
+                        <span class="comment-author">${commentData.author}</span>
+                        <span class="comment-date">${formatCommentDate(commentData.date)}</span>
+                    </div>
+                    <p class="comment-text">${commentData.text}</p>
+                `;
+                
+                // إضافة التعليق في الأعلى
+                if (commentsContainer.firstChild) {
+                    commentsContainer.insertBefore(commentElement, commentsContainer.firstChild);
+                } else {
+                    commentsContainer.appendChild(commentElement);
+                }
+                
+                // تحديث عداد التعليقات
+                updateCommentsCount();
+            }
+            
+            // مسح حقل الإدخال
+            input.value = '';
+            
+            // إظهار إشعار النجاح
+            showNotification(currentLanguage === 'ar' ? 
+                'تمت إضافة تعليقك بنجاح' : 
+                'Your comment has been added successfully');
+                
+        } catch (error) {
+            console.error('Error adding comment:', error);
+            showNotification(currentLanguage === 'ar' ? 
+                'حدث خطأ أثناء إضافة التعليق' : 
+                'Error adding comment');
+        }
     }
     
     // ====== تحميل التعليقات من Firebase ======
     async function loadCommentsFromFirebase(productId) {
-      try {
-        const db = window.firebaseDatabase;
-        const commentsRef = window.firebase.ref(db, 'comments/' + productId);
-        const snapshot = await window.firebase.get(commentsRef);
-        
-        const commentsContainer = document.getElementById('product-comments');
-        commentsContainer.innerHTML = '';
-        
-        if (snapshot.exists()) {
-          const comments = snapshot.val();
-          const commentsArray = [];
-          
-          // تحويل التعليقات إلى مصفوفة
-          Object.keys(comments).forEach(commentId => {
-            const comment = comments[commentId];
-            commentsArray.push({
-              id: commentId,
-              ...comment
-            });
-          });
-          
-          // ترتيب التعليقات من الأحدث إلى الأقدم
-          commentsArray.sort((a, b) => new Date(b.date) - new Date(a.date));
-          
-          // عرض التعليقات
-          if (commentsArray.length > 0) {
-            commentsArray.forEach(comment => {
-              const commentElement = document.createElement('div');
-              commentElement.className = 'comment-item';
-              commentElement.innerHTML = `
-                <div class="comment-header">
-                  <span class="comment-author">${comment.author}</span>
-                  <span class="comment-date">${new Date(comment.date).toLocaleDateString('ar-SA')}</span>
-                </div>
-                <p class="comment-text">${comment.text}</p>
-              `;
-              commentsContainer.appendChild(commentElement);
-            });
-          } else {
-            showNoCommentsMessage(commentsContainer);
-          }
-        } else {
-          showNoCommentsMessage(commentsContainer);
+        try {
+            const commentsRef = ref(database, 'comments/' + productId);
+            const snapshot = await get(commentsRef);
+            
+            const commentsContainer = document.getElementById('product-comments');
+            if (!commentsContainer) return;
+            
+            commentsContainer.innerHTML = '';
+            
+            if (snapshot.exists()) {
+                const comments = snapshot.val();
+                const commentsArray = [];
+                
+                // تحويل التعليقات إلى مصفوفة
+                Object.keys(comments).forEach(commentId => {
+                    const comment = comments[commentId];
+                    commentsArray.push({
+                        id: commentId,
+                        ...comment
+                    });
+                });
+                
+                // ترتيب التعليقات من الأحدث إلى الأقدم
+                commentsArray.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                
+                // عرض التعليقات
+                if (commentsArray.length > 0) {
+                    commentsArray.forEach(comment => {
+                        const commentElement = document.createElement('div');
+                        commentElement.className = 'comment-item';
+                        commentElement.innerHTML = `
+                            <div class="comment-header">
+                                <span class="comment-author">${comment.author}</span>
+                                <span class="comment-date">${formatCommentDate(comment.date)}</span>
+                            </div>
+                            <p class="comment-text">${comment.text}</p>
+                        `;
+                        commentsContainer.appendChild(commentElement);
+                    });
+                } else {
+                    showNoCommentsMessage(commentsContainer);
+                }
+            } else {
+                showNoCommentsMessage(commentsContainer);
+            }
+            
+            // تحديث عداد التعليقات
+            updateCommentsCount();
+            
+        } catch (error) {
+            console.error('Error loading comments:', error);
+            const commentsContainer = document.getElementById('product-comments');
+            if (commentsContainer) {
+                showErrorMessage(commentsContainer);
+            }
         }
-      } catch (error) {
-        console.error('Error loading comments:', error);
+    }
+    
+    // ====== تحديث عداد التعليقات ======
+    function updateCommentsCount() {
         const commentsContainer = document.getElementById('product-comments');
-        commentsContainer.innerHTML = `
-          <div class="comment-item">
-            <p class="comment-text" style="text-align: center; color: var(--text-muted);">
-              <i class="fas fa-exclamation-triangle"></i><br>
-              <span class="rtl-text">حدث خطأ في تحميل التعليقات</span>
-              <span class="ltr-text" style="display: none;">Error loading comments</span>
-            </p>
-          </div>
-        `;
-      }
+        if (!commentsContainer) return;
+        
+        // عد العناصر التي لديها كلاس comment-item
+        const commentItems = commentsContainer.querySelectorAll('.comment-item:not(.no-comments)');
+        const commentsCount = commentItems.length;
+        
+        const countElement = document.getElementById('comments-count');
+        if (countElement) {
+            if (currentLanguage === 'ar') {
+                countElement.innerHTML = `<i class="fas fa-comments"></i> التعليقات (${commentsCount})`;
+            } else {
+                countElement.innerHTML = `<i class="fas fa-comments"></i> Comments (${commentsCount})`;
+            }
+        }
     }
     
     function showNoCommentsMessage(container) {
-      container.innerHTML = `
-        <div class="comment-item">
-          <p class="comment-text" style="text-align: center; color: var(--text-muted);">
-            <i class="far fa-comment-dots"></i><br>
-            <span class="rtl-text">لا توجد تعليقات بعد. كن أول من يعلق!</span>
-            <span class="ltr-text" style="display: none;">No comments yet. Be the first to comment!</span>
-          </p>
-        </div>
-      `;
+        container.innerHTML = `
+            <div class="comment-item no-comments">
+                <p class="comment-text" style="text-align: center; color: var(--text-muted); padding: 30px 0;">
+                    <i class="far fa-comment-dots" style="font-size: 48px; margin-bottom: 10px; opacity: 0.5;"></i><br>
+                    <span class="rtl-text">لا توجد تعليقات بعد. كن أول من يعلق!</span>
+                    <span class="ltr-text" style="display: none;">No comments yet. Be the first to comment!</span>
+                </p>
+            </div>
+        `;
+    }
+    
+    function showErrorMessage(container) {
+        container.innerHTML = `
+            <div class="comment-item">
+                <p class="comment-text" style="text-align: center; color: var(--error-color); padding: 20px;">
+                    <i class="fas fa-exclamation-triangle"></i><br>
+                    <span class="rtl-text">حدث خطأ في تحميل التعليقات</span>
+                    <span class="ltr-text" style="display: none;">Error loading comments</span>
+                </p>
+            </div>
+        `;
     }
     
     function purchaseProduct() {
-      const user = checkAuthBeforePurchase();
-      if (!user) return;
-      
-      const product = allProducts.find(p => p.id === currentProductId);
-      if (!product) {
-        showNotification(currentLanguage === 'ar' ? 
-          'المنتج غير موجود' : 
-          'Product not found');
-        return;
-      }
-      
-      // إضافة المنتج إلى السلة
-      addToCart(currentProductId);
-      closeProductDetail();
+        const user = checkAuthBeforePurchase();
+        if (!user) return;
+        
+        const product = allProducts.find(p => p.id === currentProductId);
+        if (!product) {
+            showNotification(currentLanguage === 'ar' ? 
+                'المنتج غير موجود' : 
+                'Product not found');
+            return;
+        }
+        
+        // إضافة المنتج إلى السلة
+        addToCart(currentProductId);
+        closeProductDetail();
+    }
+
+    // ====== تحديث دالة البحث لجلب المنتجات من Firebase مباشرة ======
+    async function searchProducts() {
+        const searchTerm = document.getElementById('search-input').value.toLowerCase();
+        
+        if (!searchTerm.trim()) {
+            renderSearchResults([]);
+            return;
+        }
+        
+        try {
+            // جلب جميع المنتجات من Firebase في كل بحث
+            const productsRef = ref(database, 'products');
+            const snapshot = await get(productsRef);
+            let filteredProducts = [];
+            
+            if (snapshot.exists()) {
+                const products = snapshot.val();
+                
+                Object.keys(products).forEach(productId => {
+                    const product = {
+                        id: productId,
+                        ...products[productId]
+                    };
+                    
+                    // التأكد من وجود صورة
+                    product.image = getProductImage(product);
+                    
+                    // البحث في جميع الحقول
+                    const searchFields = [
+                        product.title?.toLowerCase() || '',
+                        product.titleEn?.toLowerCase() || '',
+                        product.category?.toLowerCase() || '',
+                        product.categoryEn?.toLowerCase() || '',
+                        product.subcategory?.toLowerCase() || '',
+                        product.subcategoryEn?.toLowerCase() || '',
+                        product.description?.toLowerCase() || '',
+                        product.descriptionEn?.toLowerCase() || '',
+                        product.type?.toLowerCase() || '',
+                        product.typeEn?.toLowerCase() || '',
+                        product.format?.toLowerCase() || '',
+                        product.formatEn?.toLowerCase() || ''
+                    ];
+                    
+                    if (searchFields.some(field => field.includes(searchTerm))) {
+                        filteredProducts.push(product);
+                    }
+                });
+                
+                // تحديث المنتجات المحلية
+                allProducts = Object.keys(products).map(productId => ({
+                    id: productId,
+                    ...products[productId],
+                    image: getProductImage(products[productId])
+                }));
+            }
+            
+            renderSearchResults(filteredProducts);
+            
+        } catch (error) {
+            console.error('Error searching products:', error);
+            // البحث في المنتجات المحلية كبديل
+            const localFiltered = allProducts.filter(product => {
+                const searchFields = [
+                    product.title?.toLowerCase() || '',
+                    product.titleEn?.toLowerCase() || '',
+                    product.category?.toLowerCase() || '',
+                    product.categoryEn?.toLowerCase() || '',
+                    product.subcategory?.toLowerCase() || '',
+                    product.subcategoryEn?.toLowerCase() || '',
+                    product.description?.toLowerCase() || '',
+                    product.descriptionEn?.toLowerCase() || ''
+                ];
+                
+                return searchFields.some(field => field.includes(searchTerm));
+            });
+            
+            renderSearchResults(localFiltered);
+        }
+    }
+
+    // ====== دالة عرض كل القصص ======
+    function displayAllStories() {
+        const stories = allProducts.filter(p => p.category === 'قصص');
+        const sortedStories = sortProducts(stories);
+        
+        // إنشاء محتوى النافذة المنبثقة
+        const modalContent = `
+            <div class="all-stories-header">
+                <h2>
+                    <i class="fas fa-book"></i>
+                    <span class="rtl-text">جميع القصص (${sortedStories.length})</span>
+                    <span class="ltr-text" style="display: none;">All Stories (${sortedStories.length})</span>
+                </h2>
+                <button class="close-modal-btn" onclick="closeAllStories()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="all-stories-grid" id="all-stories-grid">
+                ${sortedStories.map(product => `
+                    <div class="all-stories-card" onclick="openProductDetail('${product.id}')">
+                        <div class="all-stories-card-image">
+                            <img src="${getProductImage(product)}" alt="${product.title}">
+                        </div>
+                        <div class="all-stories-card-content">
+                            <h3 class="all-stories-card-title rtl-text">${product.title}</h3>
+                            <h3 class="all-stories-card-title ltr-text" style="display: none;">${product.titleEn}</h3>
+                            
+                            <div class="all-stories-card-meta">
+                                <span class="all-stories-meta-item">
+                                    <i class="fas fa-star" style="color: var(--accent-color);"></i> ${product.rating}
+                                </span>
+                                
+                                <span class="all-stories-meta-item rtl-text">
+                                    <i class="fas fa-tag"></i> ${product.subcategory}
+                                </span>
+                                <span class="all-stories-meta-item ltr-text" style="display: none;">
+                                    <i class="fas fa-tag"></i> ${product.subcategoryEn}
+                                </span>
+                            </div>
+                            
+                            <p class="all-stories-card-description rtl-text">
+                                ${product.description.substring(0, 150)}...
+                            </p>
+                            <p class="all-stories-card-description ltr-text" style="display: none;">
+                                ${product.descriptionEn.substring(0, 150)}...
+                            </p>
+                            
+                            <div class="all-stories-card-footer">
+                                <div class="all-stories-card-price">${product.price}</div>
+                                <button class="all-stories-card-button" onclick="event.stopPropagation(); addToCart('${product.id}', event)">
+                                    <i class="fas fa-cart-plus"></i>
+                                    <span class="rtl-text">شراء</span>
+                                    <span class="ltr-text" style="display: none;">Buy</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+        
+        // تعيين المحتوى في النافذة المنبثقة
+        document.getElementById('all-stories-content').innerHTML = modalContent;
+        
+        // إظهار النافذة المنبثقة مع تأثير انزلاقي
+        const modal = document.getElementById('all-stories-modal');
+        modal.style.display = 'block';
+        
+        // إضافة تأثير ظهور تدريجي
+        setTimeout(() => {
+            modal.style.opacity = '1';
+            modal.style.transform = 'translateY(0)';
+        }, 10);
+        
+        document.body.style.overflow = 'hidden';
+        
+        // تحديث العناصر بناءً على اللغة
+        updateLanguageElements();
+    }
+    
+    function closeAllStories() {
+        const modal = document.getElementById('all-stories-modal');
+        
+        // إضافة تأثير اختفاء تدريجي
+        modal.style.opacity = '0';
+        modal.style.transform = 'translateY(100%)';
+        
+        setTimeout(() => {
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }, 300);
     }
 
     // ====== لوحة البحث مع المنتجات الصغيرة ======
     function openSearch() {
-      document.getElementById('search-overlay').style.display = 'block';
-      document.body.style.overflow = 'hidden';
-      searchProducts();
-      document.getElementById('search-input').focus();
+        document.getElementById('search-overlay').style.display = 'block';
+        document.body.style.overflow = 'hidden';
+        searchProducts();
+        document.getElementById('search-input').focus();
     }
     
     function closeSearch() {
-      document.getElementById('search-overlay').style.display = 'none';
-      document.body.style.overflow = 'auto';
+        document.getElementById('search-overlay').style.display = 'none';
+        document.body.style.overflow = 'auto';
     }
     
     function updateSearchPlaceholder() {
-      const input = document.getElementById('search-input');
-      if (input) {
-        input.placeholder = currentLanguage === 'ar' ? 
-          'ابحث عن كتب، قصص، فيديوهات...' : 
-          'Search for books, stories, videos...';
-      }
-    }
-    
-    function searchProducts() {
-      const searchTerm = document.getElementById('search-input').value.toLowerCase();
-      const filteredProducts = allProducts.filter(product => {
-        const searchFields = [
-          product.title.toLowerCase(),
-          product.titleEn.toLowerCase(),
-          product.category.toLowerCase(),
-          product.categoryEn.toLowerCase(),
-          product.subcategory.toLowerCase(),
-          product.subcategoryEn.toLowerCase(),
-          product.description.toLowerCase(),
-          product.descriptionEn.toLowerCase()
-        ];
-        
-        return searchFields.some(field => field.includes(searchTerm));
-      });
-      
-      renderSearchResults(filteredProducts);
+        const input = document.getElementById('search-input');
+        if (input) {
+            input.placeholder = currentLanguage === 'ar' ? 
+                'ابحث عن كتب، قصص، فيديوهات...' : 
+                'Search for books, stories, videos...';
+        }
     }
     
     function renderSearchResults(products) {
-      const container = document.getElementById('search-results');
-      container.innerHTML = '';
-      
-      if (products.length === 0) {
-        const noResults = document.createElement('div');
-        noResults.className = 'no-results';
-        noResults.innerHTML = `
-          <i class="fas fa-search"></i>
-          <p class="rtl-text" style="margin-top: 20px;">لم يتم العثور على منتجات تطابق بحثك</p>
-          <p class="ltr-text" style="display: none; margin-top: 20px;">No products found matching your search</p>
-          <p style="color: var(--text-muted); margin-top: 10px; font-size: 14px;">
-            <span class="rtl-text">جرب كلمات بحث مختلفة</span>
-            <span class="ltr-text" style="display: none;">Try different search keywords</span>
-          </p>
-        `;
-        container.appendChild(noResults);
-      } else {
-        const sortedProducts = sortProducts(products);
-        const grid = document.createElement('div');
-        grid.className = 'search-products-grid';
+        const container = document.getElementById('search-results');
+        if (!container) return;
         
-        sortedProducts.forEach(product => {
-          const card = document.createElement('div');
-          card.className = 'search-product-card';
-          card.onclick = () => openProductDetail(product.id);
-          card.innerHTML = `
-            <img src="${product.image}" alt="${product.title}">
-            <div class="search-product-card-content">
-              <h3 class="search-product-card-title rtl-text">${product.title}</h3>
-              <h3 class="search-product-card-title ltr-text" style="display: none;">${product.titleEn}</h3>
-              
-              <div class="search-product-card-meta">
-                <span class="search-product-meta-item rtl-text">
-                  <i class="fas fa-tag"></i> ${product.category}
-                </span>
-                <span class="search-product-meta-item ltr-text" style="display: none;">
-                  <i class="fas fa-tag"></i> ${product.categoryEn}
-                </span>
-                
-                <span class="search-product-meta-item">
-                  <i class="fas fa-star" style="color: var(--accent-color);"></i> ${product.rating}
-                </span>
-                
-                <span class="search-product-meta-item rtl-text">
-                  <i class="fas fa-box"></i> ${product.format}
-                </span>
-                <span class="search-product-meta-item ltr-text" style="display: none;">
-                  <i class="fas fa-box"></i> ${product.formatEn}
-                </span>
-              </div>
-              
-              <p class="card-description rtl-text" style="font-size: 14px; margin-bottom: 15px;">
-                ${product.description.substring(0, 100)}...
-              </p>
-              <p class="card-description ltr-text" style="display: none; font-size: 14px; margin-bottom: 15px;">
-                ${product.descriptionEn.substring(0, 100)}...
-              </p>
-              
-              <div class="search-product-card-price">${product.price}</div>
-              
-              <div class="search-product-card-footer">
-                <button class="search-product-card-button" onclick="addToCart('${product.id}', event)">
-                  <i class="fas fa-cart-plus"></i>
-                  <span class="rtl-text">شراء</span>
-                  <span class="ltr-text" style="display: none;">Buy</span>
-                </button>
-                
-                <button class="search-product-card-button" style="background: var(--gradient-secondary);" 
-                        onclick="event.stopPropagation(); openProductDetail('${product.id}')">
-                  <i class="fas fa-eye"></i>
-                  <span class="rtl-text">عرض</span>
-                  <span class="ltr-text" style="display: none;">View</span>
-                </button>
-              </div>
-            </div>
-          `;
-          grid.appendChild(card);
-        });
+        container.innerHTML = '';
         
-        container.appendChild(grid);
-      }
-      
-      // تحديث العداد
-      if (currentLanguage === 'ar') {
-        document.getElementById('search-count').textContent = `تم العثور على ${products.length} منتج`;
-        document.getElementById('search-count-en').style.display = 'none';
-      } else {
-        document.getElementById('search-count-en').textContent = `${products.length} products found`;
-        document.getElementById('search-count-en').style.display = '';
-        document.getElementById('search-count').style.display = 'none';
-      }
-      
-      // تحديث العناصر بناءً على اللغة
-      updateLanguageElements();
+        if (products.length === 0) {
+            const noResults = document.createElement('div');
+            noResults.className = 'no-results';
+            noResults.innerHTML = `
+                <i class="fas fa-search"></i>
+                <p class="rtl-text" style="margin-top: 20px;">لم يتم العثور على منتجات تطابق بحثك</p>
+                <p class="ltr-text" style="display: none; margin-top: 20px;">No products found matching your search</p>
+                <p style="color: var(--text-muted); margin-top: 10px; font-size: 14px;">
+                    <span class="rtl-text">جرب كلمات بحث مختلفة</span>
+                    <span class="ltr-text" style="display: none;">Try different search keywords</span>
+                </p>
+            `;
+            container.appendChild(noResults);
+        } else {
+            const sortedProducts = sortProducts(products);
+            const grid = document.createElement('div');
+            grid.className = 'search-products-grid';
+            
+            sortedProducts.forEach(product => {
+                const card = document.createElement('div');
+                card.className = 'search-product-card';
+                card.onclick = () => openProductDetail(product.id);
+                card.innerHTML = `
+                    <img src="${getProductImage(product)}" alt="${product.title}">
+                    <div class="search-product-card-content">
+                        <h3 class="search-product-card-title rtl-text">${product.title}</h3>
+                        <h3 class="search-product-card-title ltr-text" style="display: none;">${product.titleEn}</h3>
+                        
+                        <div class="search-product-card-meta">
+                            <span class="search-product-meta-item rtl-text">
+                                <i class="fas fa-tag"></i> ${product.category}
+                            </span>
+                            <span class="search-product-meta-item ltr-text" style="display: none;">
+                                <i class="fas fa-tag"></i> ${product.categoryEn}
+                            </span>
+                            
+                            <span class="search-product-meta-item">
+                                <i class="fas fa-star" style="color: var(--accent-color);"></i> ${product.rating}
+                            </span>
+                            
+                            <span class="search-product-meta-item rtl-text">
+                                <i class="fas fa-box"></i> ${product.format}
+                            </span>
+                            <span class="search-product-meta-item ltr-text" style="display: none;">
+                                <i class="fas fa-box"></i> ${product.formatEn}
+                            </span>
+                        </div>
+                        
+                        <p class="card-description rtl-text" style="font-size: 14px; margin-bottom: 15px;">
+                            ${product.description.substring(0, 100)}...
+                        </p>
+                        <p class="card-description ltr-text" style="display: none; font-size: 14px; margin-bottom: 15px;">
+                            ${product.descriptionEn.substring(0, 100)}...
+                        </p>
+                        
+                        <div class="search-product-card-price">${product.price}</div>
+                        
+                        <div class="search-product-card-footer">
+                            <button class="search-product-card-button" onclick="addToCart('${product.id}', event)">
+                                <i class="fas fa-cart-plus"></i>
+                                <span class="rtl-text">شراء</span>
+                                <span class="ltr-text" style="display: none;">Buy</span>
+                            </button>
+                            
+                            <button class="search-product-card-button" style="background: var(--gradient-secondary);" 
+                                    onclick="event.stopPropagation(); openProductDetail('${product.id}')">
+                                <i class="fas fa-eye"></i>
+                                <span class="rtl-text">عرض</span>
+                                <span class="ltr-text" style="display: none;">View</span>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+            
+            container.appendChild(grid);
+        }
+        
+        // تحديث العداد
+        if (currentLanguage === 'ar') {
+            document.getElementById('search-count').textContent = `تم العثور على ${products.length} منتج`;
+            document.getElementById('search-count-en').style.display = 'none';
+        } else {
+            document.getElementById('search-count-en').textContent = `${products.length} products found`;
+            document.getElementById('search-count-en').style.display = '';
+            document.getElementById('search-count').style.display = 'none';
+        }
+        
+        // تحديث العناصر بناءً على اللغة
+        updateLanguageElements();
     }
 
     // ====== وظائف مساعدة ======
     function scrollToTop() {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
     function updateLanguageElements() {
-      // تحديث تنسيق المنتج بناءً على اللغة
-      const formatElements = document.querySelectorAll('[id*="format"]');
-      formatElements.forEach(el => {
-        if (currentLanguage === 'ar') {
-          if (el.id.includes('en')) {
-            el.style.display = 'none';
-          } else if (!el.id.includes('badge')) {
-            el.style.display = '';
-          }
-        } else {
-          if (el.id.includes('en')) {
-            el.style.display = '';
-          } else if (!el.id.includes('badge')) {
-            el.style.display = 'none';
-          }
-        }
-      });
+        // تحديث تنسيق المنتج بناءً على اللغة
+        const formatElements = document.querySelectorAll('[id*="format"]');
+        formatElements.forEach(el => {
+            if (currentLanguage === 'ar') {
+                if (el.id.includes('en')) {
+                    el.style.display = 'none';
+                } else if (!el.id.includes('badge')) {
+                    el.style.display = '';
+                }
+            } else {
+                if (el.id.includes('en')) {
+                    el.style.display = '';
+                } else if (!el.id.includes('badge')) {
+                    el.style.display = 'none';
+                }
+            }
+        });
     }
 
     function openPrivacy() {
-      alert(currentLanguage === 'ar' ? 'صفحة الخصوصية قيد التطوير' : 'Privacy page under development');
+        alert(currentLanguage === 'ar' ? 'صفحة الخصوصية قيد التطوير' : 'Privacy page under development');
     }
 
     function openOrderHistory() {
-      const user = checkAuth();
-      if (!user) return;
-      
-      alert(currentLanguage === 'ar' ? 'صفحة سجل الطلبات قيد التطوير' : 'Order history page under development');
+        const user = checkAuth();
+        if (!user) return;
+        
+        alert(currentLanguage === 'ar' ? 'صفحة سجل الطلبات قيد التطوير' : 'Order history page under development');
     }
 
     function openAccount() {
-      const user = checkAuth();
-      if (!user) return;
-      
-      alert(currentLanguage === 'ar' ? 'صفحة الحساب قيد التطوير' : 'Account page under development');
+        const user = checkAuth();
+        if (!user) return;
+        
+        alert(currentLanguage === 'ar' ? 'صفحة الحساب قيد التطوير' : 'Account page under development');
     }
 
     function openFeedback() {
-      const user = checkAuth();
-      if (!user) return;
-      
-      alert(currentLanguage === 'ar' ? 'صفحة الرأي العام قيد التطوير' : 'Feedback page under development');
+        const user = checkAuth();
+        if (!user) return;
+        
+        alert(currentLanguage === 'ar' ? 'صفحة الرأي العام قيد التطوير' : 'Feedback page under development');
     }
 
     function openTerms() {
-      alert(currentLanguage === 'ar' ? 'صفحة سياسة الاستخدام قيد التطوير' : 'Terms page under development');
+        alert(currentLanguage === 'ar' ? 'صفحة سياسة الاستخدام قيد التطوير' : 'Terms page under development');
     }
 
     function openFAQ() {
-      alert(currentLanguage === 'ar' ? 'صفحة الأسئلة الشائعة قيد التطوير' : 'FAQ page under development');
+        alert(currentLanguage === 'ar' ? 'صفحة الأسئلة الشائعة قيد التطوير' : 'FAQ page under development');
     }
 
     function openContact() {
-      alert(currentLanguage === 'ar' ? 'صفحة الاتصال بنا قيد التطوير' : 'Contact page under development');
+        alert(currentLanguage === 'ar' ? 'صفحة الاتصال بنا قيد التطوير' : 'Contact page under development');
     }
 
     function openReport() {
-      const user = checkAuth();
-      if (!user) return;
-      
-      alert(currentLanguage === 'ar' ? 'صفحة الإبلاغ عن مشكلة قيد التطوير' : 'Report issue page under development');
+        const user = checkAuth();
+        if (!user) return;
+        
+        alert(currentLanguage === 'ar' ? 'صفحة الإبلاغ عن مشكلة قيد التطوير' : 'Report issue page under development');
     }
 
     function openSuggestions() {
-      const user = checkAuth();
-      if (!user) return;
-      
-      alert(currentLanguage === 'ar' ? 'صفحة المقترحات قيد التطوير' : 'Suggestions page under development');
+        const user = checkAuth();
+        if (!user) return;
+        
+        alert(currentLanguage === 'ar' ? 'صفحة المقترحات قيد التطوير' : 'Suggestions page under development');
     }
 
     // ====== حفظ إحصائيات المستخدم ======
     async function trackUserActivity(action, productId = null) {
-      try {
-        const user = JSON.parse(localStorage.getItem('user') || 'null');
-        if (!user || !user.uid) return;
-        
-        const db = window.firebaseDatabase;
-        const activityRef = window.firebase.ref(db, `userActivity/${user.uid}`);
-        const newActivityRef = window.firebase.push(activityRef);
-        
-        const activityData = {
-          action: action,
-          productId: productId,
-          timestamp: new Date().toISOString(),
-          userAgent: navigator.userAgent
-        };
-        
-        await window.firebase.set(newActivityRef, activityData);
-      } catch (error) {
-        console.error('Error tracking user activity:', error);
-      }
+        try {
+            const user = JSON.parse(localStorage.getItem('user') || 'null');
+            if (!user || !user.uid) return;
+            
+            const activityRef = ref(database, `userActivity/${user.uid}`);
+            const newActivityRef = push(activityRef);
+            
+            const activityData = {
+                action: action,
+                productId: productId,
+                timestamp: new Date().toISOString(),
+                userAgent: navigator.userAgent
+            };
+            
+            await set(newActivityRef, activityData);
+        } catch (error) {
+            console.error('Error tracking user activity:', error);
+        }
     }
 
-    // ====== حفظ الإحصائيات عند التفاعل مع المنتجات ======
-    document.addEventListener('click', function(e) {
-      const productCard = e.target.closest('.product-card, .scroll-item, .video-card');
-      if (productCard) {
-        const productId = productCard.dataset.id || 
-                         productCard.querySelector('[data-product-id]')?.dataset.productId;
-        if (productId) {
-          trackUserActivity('product_view', productId);
-        }
-      }
-    });
-
     // ====== تهيئة الصفحة عند التحميل ======
-    window.addEventListener('DOMContentLoaded', () => {
-      // التحقق من تسجيل الدخول أولاً
-      const user = checkAuth();
-      if (!user) return;
-      
-      // عرض اسم المستخدم في الشريط العلوي
-      const userEmail = user.email || 'مستخدم';
-      const welcomeText = document.querySelector('.welcome-text');
-      if (welcomeText && currentLanguage === 'ar') {
-        welcomeText.textContent = `مرحباً ${userEmail.split('@')[0]}`;
-      }
-      
-      // استعادة الاتجاه
-      const savedDirection = localStorage.getItem('direction') || 'rtl';
-      document.documentElement.setAttribute('dir', savedDirection);
-      
-      // استعادة اللغة
-      const savedLang = localStorage.getItem('language') || 'ar';
-      currentLanguage = savedLang;
-      
-      if (currentLanguage === 'en') {
-        // تطبيق اللغة الإنجليزية
-        document.documentElement.setAttribute('lang', 'en');
-        document.getElementById('language-value').textContent = 'English';
-        document.querySelectorAll('.rtl-text').forEach(el => el.style.display = 'none');
-        document.querySelectorAll('.ltr-text').forEach(el => el.style.display = '');
-      } else {
-        // تأكد من أن العربية هي الافتراضية
-        document.documentElement.setAttribute('lang', 'ar');
-        document.documentElement.setAttribute('dir', 'rtl');
-      }
-      
-      // استعادة وضع العرض
-      const savedDisplayMode = localStorage.getItem('displayMode') || 'random';
-      displayMode = savedDisplayMode;
-      const modeNames = { random: 'عشوائي', rating: 'الأعلى تقييماً', newest: 'الأحدث' };
-      const modeNamesEn = { random: 'Random', rating: 'Highest Rated', newest: 'Newest' };
-      const displayModeValue = document.getElementById('display-mode-value');
-      if (currentLanguage === 'ar') {
-        displayModeValue.textContent = modeNames[displayMode];
-      } else {
-        displayModeValue.textContent = modeNamesEn[displayMode];
-      }
-      
-      updateCartBadge();
-      updateSearchPlaceholder();
-      
-      // استعادة إعدادات النص
-      const savedSize = localStorage.getItem('textSize');
-      if (savedSize) {
-        document.getElementById('textSizeSlider').value = savedSize;
-        updateTextSize(savedSize);
-      }
-      
-      // استعادة المظهر
-      const savedTheme = localStorage.getItem('theme') || 'dark';
-      currentTheme = savedTheme;
-      
-      // ضبط نص المظهر بناءً على اللغة
-      const themeValue = document.getElementById('theme-value');
-      if (currentLanguage === 'ar') {
-        themeValue.textContent = currentTheme;
-      } else {
-        const themeNames = {'داكن': 'Dark', 'فاتح': 'Light', 'تلقائي': 'Auto'};
-        themeValue.textContent = themeNames[currentTheme] || 'Dark';
-      }
-      
-      // تطبيق المظهر
-      applyTheme();
-      
-      // عرض المحتوى
-      renderAllContent();
-      
-      // إضافة أحداث الإغلاق
-      document.getElementById('product-detail-overlay').addEventListener('click', function(e) {
-        if (e.target === this) {
-          closeProductDetail();
+    async function initializePage() {
+        // التحقق من تسجيل الدخول أولاً
+        const user = checkAuth();
+        if (!user) return;
+        
+        // عرض اسم المستخدم في الشريط العلوي
+        const userEmail = user.email || 'مستخدم';
+        const welcomeText = document.querySelector('.welcome-text');
+        if (welcomeText && currentLanguage === 'ar') {
+            welcomeText.textContent = `مرحباً ${userEmail.split('@')[0]}`;
         }
-      });
-      
-      document.getElementById('search-overlay').addEventListener('click', function(e) {
-        if (e.target === this) {
-          closeSearch();
+        
+        // استعادة الاتجاه
+        const savedDirection = localStorage.getItem('direction') || 'rtl';
+        document.documentElement.setAttribute('dir', savedDirection);
+        
+        // استعادة اللغة
+        const savedLang = localStorage.getItem('language') || 'ar';
+        currentLanguage = savedLang;
+        
+        if (currentLanguage === 'en') {
+            // تطبيق اللغة الإنجليزية
+            document.documentElement.setAttribute('lang', 'en');
+            const languageValue = document.getElementById('language-value');
+            if (languageValue) languageValue.textContent = 'English';
+            document.querySelectorAll('.rtl-text').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('.ltr-text').forEach(el => el.style.display = '');
+        } else {
+            // تأكد من أن العربية هي الافتراضية
+            document.documentElement.setAttribute('lang', 'ar');
+            document.documentElement.setAttribute('dir', 'rtl');
         }
-      });
-      
-      // تحديث المعلومات الشخصية
-      updateUserProfile();
-    });
+        
+        // استعادة وضع العرض
+        const savedDisplayMode = localStorage.getItem('displayMode') || 'random';
+        displayMode = savedDisplayMode;
+        const modeNames = { random: 'عشوائي', rating: 'الأعلى تقييماً', newest: 'الأحدث' };
+        const modeNamesEn = { random: 'Random', rating: 'Highest Rated', newest: 'Newest' };
+        const displayModeValue = document.getElementById('display-mode-value');
+        if (displayModeValue) {
+            if (currentLanguage === 'ar') {
+                displayModeValue.textContent = modeNames[displayMode];
+            } else {
+                displayModeValue.textContent = modeNamesEn[displayMode];
+            }
+        }
+        
+        updateCartBadge();
+        updateSearchPlaceholder();
+        
+        // استعادة إعدادات النص
+        const savedSize = localStorage.getItem('textSize');
+        if (savedSize) {
+            const textSizeSlider = document.getElementById('textSizeSlider');
+            if (textSizeSlider) {
+                textSizeSlider.value = savedSize;
+                updateTextSize(savedSize);
+            }
+        }
+        
+        // استعادة المظهر
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        currentTheme = savedTheme;
+        
+        // ضبط نص المظهر بناءً على اللغة
+        const themeValue = document.getElementById('theme-value');
+        if (themeValue) {
+            if (currentLanguage === 'ar') {
+                themeValue.textContent = currentTheme;
+            } else {
+                const themeNames = {'داكن': 'Dark', 'فاتح': 'Light', 'تلقائي': 'Auto'};
+                themeValue.textContent = themeNames[currentTheme] || 'Dark';
+            }
+        }
+        
+        // تطبيق المظهر
+        applyTheme();
+        
+        // تحميل المنتجات من Firebase
+        await loadProductsFromFirebase();
+        
+        // إعداد مستمع في الوقت الحقيقي للمنتجات
+        setupRealtimeProductsListener();
+        
+        // إضافة أحداث الإغلاق
+        const productDetailOverlay = document.getElementById('product-detail-overlay');
+        if (productDetailOverlay) {
+            productDetailOverlay.addEventListener('click', function(e) {
+                if (e.target === this) {
+                    closeProductDetail();
+                }
+            });
+        }
+        
+        const searchOverlay = document.getElementById('search-overlay');
+        if (searchOverlay) {
+            searchOverlay.addEventListener('click', function(e) {
+                if (e.target === this) {
+                    closeSearch();
+                }
+            });
+        }
+        
+        const allStoriesModal = document.getElementById('all-stories-modal');
+        if (allStoriesModal) {
+            allStoriesModal.addEventListener('click', function(e) {
+                if (e.target === this) {
+                    closeAllStories();
+                }
+            });
+        }
+        
+        // إضافة حدث للنقر على زر "عرض الكل" للقصص
+        const showAllStoriesBtn = document.getElementById('show-all-stories');
+        if (showAllStoriesBtn) {
+            showAllStoriesBtn.addEventListener('click', displayAllStories);
+        }
+        
+        // تحديث المعلومات الشخصية
+        updateUserProfile();
+    }
 
     // ====== تحديث معلومات المستخدم ======
     async function updateUserProfile() {
-      try {
-        const user = JSON.parse(localStorage.getItem('user') || 'null');
-        if (!user || !user.uid) return;
-        
-        const db = window.firebaseDatabase;
-        const userRef = window.firebase.ref(db, 'users/' + user.uid);
-        const snapshot = await window.firebase.get(userRef);
-        
-        if (snapshot.exists()) {
-          const userData = snapshot.val();
-          
-          // تحديث بيانات المستخدم في التخزين المحلي
-          localStorage.setItem('user', JSON.stringify({
-            ...user,
-            username: userData.username,
-            phone: userData.phone
-          }));
-          
-          // تحديث واجهة المستخدم إذا كان هناك مكان لعرض اسم المستخدم
-          const userDisplayElements = document.querySelectorAll('.user-display-name');
-          userDisplayElements.forEach(el => {
-            if (userData.username) {
-              el.textContent = userData.username;
+        try {
+            const user = JSON.parse(localStorage.getItem('user') || 'null');
+            if (!user || !user.uid) return;
+            
+            const userRef = ref(database, 'users/' + user.uid);
+            const snapshot = await get(userRef);
+            
+            if (snapshot.exists()) {
+                const userData = snapshot.val();
+                
+                // تحديث بيانات المستخدم في التخزين المحلي
+                localStorage.setItem('user', JSON.stringify({
+                    ...user,
+                    username: userData.username,
+                    phone: userData.phone
+                }));
+                
+                // تحديث واجهة المستخدم إذا كان هناك مكان لعرض اسم المستخدم
+                const userDisplayElements = document.querySelectorAll('.user-display-name');
+                userDisplayElements.forEach(el => {
+                    if (userData.username) {
+                        el.textContent = userData.username;
+                    }
+                });
             }
-          });
+        } catch (error) {
+            console.error('Error updating user profile:', error);
         }
-      } catch (error) {
-        console.error('Error updating user profile:', error);
-      }
     }
 
-    // إضافة أنماط CSS للرسوم المتحركة
+    // إضافة أنماط CSS للرسوم المتحركة والعناصر الجديدة
     const style = document.createElement('style');
     style.textContent = `
-      @keyframes slideOut {
-        from {
-          transform: translateX(0);
-          opacity: 1;
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
         }
-        to {
-          transform: translateX(100%);
-          opacity: 0;
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
         }
-      }
-      
-      @keyframes fadeIn {
-        from {
-          opacity: 0;
+        
+        @keyframes slideUp {
+            from {
+                transform: translateY(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
         }
-        to {
-          opacity: 1;
+        
+        .user-display-name {
+            font-weight: bold;
+            color: var(--primary-color);
         }
-      }
-      
-      .user-display-name {
-        font-weight: bold;
-        color: var(--primary-color);
-      }
+        
+        /* أنماط التعليقات */
+        .comments-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: var(--card-bg);
+            border-radius: var(--border-radius-md);
+            border: 1px solid var(--border-color);
+        }
+        
+        .comment-form {
+            margin-bottom: 30px;
+        }
+        
+        .comment-input-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .comment-input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-sm);
+            background: var(--darker-bg);
+            color: var(--text-primary);
+            font-family: inherit;
+            resize: vertical;
+            transition: border-color 0.3s;
+        }
+        
+        .comment-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+        
+        .comment-submit-btn {
+            align-self: flex-end;
+            padding: 10px 25px;
+            background: var(--gradient-primary);
+            color: white;
+            border: none;
+            border-radius: var(--border-radius-sm);
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .comment-submit-btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .comments-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .comment-item {
+            padding: 15px;
+            background: var(--darker-bg);
+            border-radius: var(--border-radius-sm);
+            border-left: 3px solid var(--primary-color);
+        }
+        
+        .comment-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .comment-author {
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+        
+        .comment-date {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        
+        .comment-text {
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+        
+        .no-comments {
+            text-align: center;
+            border-left: none;
+            background: transparent;
+        }
+        
+        /* تحسين عرض الصور Base64 */
+        .card-image, .scroll-image, .video-player img {
+            background: var(--darker-bg);
+            transition: transform 0.3s ease;
+        }
+        
+        .card-image:hover, .scroll-image:hover {
+            transform: scale(1.05);
+        }
+        
+        /* نافذة عرض كل القصص */
+        .all-stories-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 9999;
+            display: none;
+            opacity: 0;
+            transform: translateY(100%);
+            transition: opacity 0.3s, transform 0.3s;
+        }
+        
+        .all-stories-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow-y: auto;
+            padding: 20px;
+            background: var(--dark-bg);
+        }
+        
+        .all-stories-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid var(--primary-color);
+        }
+        
+        .all-stories-header h2 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 24px;
+            color: var(--text-primary);
+        }
+        
+        .close-modal-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            font-size: 24px;
+            cursor: pointer;
+            padding: 10px;
+            border-radius: 50%;
+            transition: background 0.3s;
+        }
+        
+        .close-modal-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .all-stories-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 25px;
+            padding: 20px 0;
+        }
+        
+        .all-stories-card {
+            background: var(--card-bg);
+            border-radius: var(--border-radius-lg);
+            overflow: hidden;
+            transition: transform 0.3s, box-shadow 0.3s;
+            cursor: pointer;
+            border: 1px solid var(--border-color);
+        }
+        
+        .all-stories-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+        }
+        
+        .all-stories-card-image {
+            height: 200px;
+            overflow: hidden;
+        }
+        
+        .all-stories-card-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s;
+        }
+        
+        .all-stories-card:hover .all-stories-card-image img {
+            transform: scale(1.05);
+        }
+        
+        .all-stories-card-content {
+            padding: 20px;
+        }
+        
+        .all-stories-card-title {
+            font-size: 18px;
+            margin-bottom: 10px;
+            color: var(--text-primary);
+            line-height: 1.4;
+        }
+        
+        .all-stories-card-meta {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .all-stories-meta-item {
+            font-size: 12px;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .all-stories-card-description {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin-bottom: 20px;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        
+        .all-stories-card-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .all-stories-card-price {
+            font-size: 20px;
+            font-weight: bold;
+            color: var(--accent-color);
+        }
+        
+        .all-stories-card-button {
+            padding: 8px 20px;
+            background: var(--gradient-primary);
+            color: white;
+            border: none;
+            border-radius: var(--border-radius-sm);
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .all-stories-card-button:hover {
+            transform: translateY(-2px);
+        }
+        
+        /* إخفاء الأزرار إذا لم يكن هناك اتصال بالإنترنت */
+        @media (max-width: 768px) {
+            .admin-nav {
+                flex-wrap: wrap;
+            }
+            
+            .all-stories-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .all-stories-header h2 {
+                font-size: 20px;
+            }
+        }
     `;
     document.head.appendChild(style);
 
     // حفظ الإعدادات عند الخروج
     window.addEventListener('beforeunload', () => {
-      localStorage.setItem('theme', currentTheme);
-      localStorage.setItem('language', currentLanguage);
-      localStorage.setItem('direction', currentLanguage === 'ar' ? 'rtl' : 'ltr');
-      localStorage.setItem('displayMode', displayMode);
+        localStorage.setItem('theme', currentTheme);
+        localStorage.setItem('language', currentLanguage);
+        localStorage.setItem('direction', currentLanguage === 'ar' ? 'rtl' : 'ltr');
+        localStorage.setItem('displayMode', displayMode);
     });
+
+    // تشغيل تهيئة الصفحة عند تحميل DOM
+    document.addEventListener('DOMContentLoaded', initializePage);
+
+    // جعل الدوال متاحة عالمياً للاستدعاء من HTML
+    window.logout = logout;
+    window.addToCart = addToCart;
+    window.goToCart = goToCart;
+    window.toggleSettings = toggleSettings;
+    window.toggleLanguage = toggleLanguage;
+    window.toggleDisplayMode = toggleDisplayMode;
+    window.updateTextSize = updateTextSize;
+    window.scrollManga = scrollManga;
+    window.prevNovelPage = prevNovelPage;
+    window.nextNovelPage = nextNovelPage;
+    window.switchNovelTab = switchNovelTab;
+    window.prevVideoPage = prevVideoPage;
+    window.nextVideoPage = nextVideoPage;
+    window.switchVideoTab = switchVideoTab;
+    window.openProductDetail = openProductDetail;
+    window.closeProductDetail = closeProductDetail;
+    window.watchChapter = watchChapter;
+    window.addProductComment = addProductComment;
+    window.purchaseProduct = purchaseProduct;
+    window.openSearch = openSearch;
+    window.closeSearch = closeSearch;
+    window.searchProducts = searchProducts;
+    window.scrollToTop = scrollToTop;
+    window.openPrivacy = openPrivacy;
+    window.openOrderHistory = openOrderHistory;
+    window.openAccount = openAccount;
+    window.openFeedback = openFeedback;
+    window.openTerms = openTerms;
+    window.openFAQ = openFAQ;
+    window.openContact = openContact;
+    window.openReport = openReport;
+    window.openSuggestions = openSuggestions;
+    window.displayAllStories = displayAllStories;
+    window.closeAllStories = closeAllStories;
 </script>
 </body>
 </html>
