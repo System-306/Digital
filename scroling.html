@@ -1,88 +1,809 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>تمرير صفحات عمودي</title>
-        <link rel="icon" type="image/x-icon" href="img//icon1.jpg">
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    html, body {
-      height: 100%;
-      overflow: hidden;
-    }
-
-    .book-scroll {
-      height: 100%;
-      width: 100%;
-      overflow-y: scroll;
-      scroll-snap-type: y mandatory;
-      scroll-behavior: smooth;
-    }
-
-    .page {
-      scroll-snap-align: start;
-      height: 100vh;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      font-size: 1rem;
-      background: #f0e6d2;
-      border-bottom: 2px solid #ccc;
-    }
-
-    .page:nth-child(even) {
-      background: #e2d8c3;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مانغا - التمرير العمودي</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #1a1a1a;
+            color: #f0f0f0;
+            line-height: 1.6;
+        }
+        
+        /* شريط التنقل العلوي */
+        .navbar {
+            position: fixed;
+            top: 0;
+            right: 0;
+            left: 0;
+            background-color: rgba(0, 0, 0, 0.9);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 1000;
+            border-bottom: 2px solid #ff4757;
+            backdrop-filter: blur(10px);
+        }
+        
+        .logo {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #ff4757;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .logo i {
+            color: #ff4757;
+        }
+        
+        .nav-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        .chapters-btn {
+            background-color: #ff4757;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            font-size: 1rem;
+        }
+        
+        .chapters-btn:hover {
+            background-color: #ff6b81;
+            transform: translateY(-2px);
+        }
+        
+        /* لوحة الفصول */
+        .chapters-panel {
+            position: fixed;
+            top: 70px;
+            right: 30px;
+            background-color: rgba(0, 0, 0, 0.95);
+            width: 300px;
+            max-height: 500px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            padding: 20px;
+            overflow-y: auto;
+            z-index: 999;
+            border: 1px solid #333;
+            transform: translateY(-20px) scale(0.95);
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .chapters-panel.active {
+            transform: translateY(0) scale(1);
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .chapters-title {
+            font-size: 1.3rem;
+            margin-bottom: 20px;
+            color: #ff4757;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #333;
+        }
+        
+        .chapter-list {
+            list-style: none;
+        }
+        
+        .chapter-item {
+            padding: 12px 15px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border-right: 3px solid transparent;
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+        
+        .chapter-item:hover {
+            background-color: rgba(255, 71, 87, 0.2);
+        }
+        
+        .chapter-item.active {
+            background-color: rgba(255, 71, 87, 0.3);
+            border-right: 3px solid #ff4757;
+            font-weight: bold;
+        }
+        
+        .chapter-item-number {
+            font-size: 0.9rem;
+            color: #ff4757;
+            margin-bottom: 3px;
+        }
+        
+        .chapter-item-title {
+            font-size: 1rem;
+            color: #f0f0f0;
+        }
+        
+        /* المحتوى الرئيسي */
+        .container {
+            margin-top: 80px;
+            padding: 20px;
+            max-width: 1000px;
+            margin-right: auto;
+            margin-left: auto;
+        }
+        
+        .chapter-header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background-color: rgba(0, 0, 0, 0.7);
+            border-radius: 10px;
+            border-right: 5px solid #ff4757;
+        }
+        
+        .chapter-title {
+            font-size: 2.2rem;
+            color: #ff4757;
+            margin-bottom: 5px;
+        }
+        
+        .chapter-subtitle {
+            font-size: 1.2rem;
+            color: #aaa;
+        }
+        
+        /* صور المانغا */
+        .manga-page {
+            width: 100%;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+            transition: transform 0.3s ease;
+            background-color: #000;
+        }
+        
+        .manga-page:hover {
+            transform: scale(1.01);
+        }
+        
+        .manga-page img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        
+        .page-number {
+            background-color: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            padding: 8px 15px;
+            text-align: center;
+            font-size: 1rem;
+            border-top: 1px solid #333;
+        }
+        
+        /* شريط التقدم */
+        .progress-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            left: 20px;
+            background-color: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            z-index: 998;
+            backdrop-filter: blur(10px);
+            border: 1px solid #333;
+        }
+        
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .progress-text {
+            font-size: 0.9rem;
+            color: #aaa;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background-color: #333;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background-color: #ff4757;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        /* أزرار التنقل */
+        .nav-buttons {
+            position: fixed;
+            bottom: 100px;
+            right: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 997;
+        }
+        
+        .nav-btn {
+            background-color: #ff4757;
+            color: white;
+            border: none;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            box-shadow: 0 5px 15px rgba(255, 71, 87, 0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .nav-btn:hover {
+            background-color: #ff6b81;
+            transform: translateY(-3px);
+        }
+        
+        .nav-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .nav-btn:disabled:hover {
+            background-color: #ff4757;
+            transform: none;
+        }
+        
+        /* زر العودة للأعلى */
+        .to-top {
+            position: fixed;
+            bottom: 100px;
+            left: 30px;
+            background-color: #333;
+            color: white;
+            border: none;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+            opacity: 0;
+            visibility: hidden;
+            z-index: 997;
+        }
+        
+        .to-top.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .to-top:hover {
+            background-color: #444;
+            transform: translateY(-3px);
+        }
+        
+        /* تصميم متجاوب */
+        @media (max-width: 768px) {
+            .navbar {
+                padding: 15px 20px;
+            }
+            
+            .logo {
+                font-size: 1.5rem;
+            }
+            
+            .chapters-btn {
+                padding: 8px 15px;
+                font-size: 0.9rem;
+            }
+            
+            .chapters-panel {
+                width: 90%;
+                right: 5%;
+                max-height: 400px;
+            }
+            
+            .container {
+                padding: 10px;
+                margin-top: 70px;
+            }
+            
+            .chapter-title {
+                font-size: 1.8rem;
+            }
+            
+            .nav-buttons {
+                right: 20px;
+                bottom: 90px;
+            }
+            
+            .to-top {
+                left: 20px;
+                bottom: 90px;
+            }
+            
+            .progress-container {
+                right: 10px;
+                left: 10px;
+                bottom: 10px;
+            }
+        }
+        
+        /* تخصيص شريط التمرير */
+        ::-webkit-scrollbar {
+            width: 10px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #222;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #ff4757;
+            border-radius: 5px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #ff6b81;
+        }
+        
+        /* تأثيرات الدخول للصور */
+        .manga-page {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.5s ease, transform 0.5s ease;
+        }
+        
+        .manga-page.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
 </head>
 <body>
+    <!-- شريط التنقل العلوي -->
+    <nav class="navbar">
+        <div class="logo">
+            <i class="fas fa-book-reader"></i>
+            <span>مانغا أونلاين</span>
+        </div>
+        
+        <div class="nav-controls">
+            <button class="chapters-btn" id="chaptersBtn">
+                <i class="fas fa-list"></i>
+                <span>الفصول</span>
+            </button>
+        </div>
+    </nav>
+    
+    <!-- لوحة الفصول -->
+    <div class="chapters-panel" id="chaptersPanel">
+        <div class="chapters-title">
+            <i class="fas fa-bookmark"></i>
+            <span>قائمة الفصول</span>
+        </div>
+        
+        <ul class="chapter-list" id="chapterList">
+            <!-- سيتم إنشاء الفصول ديناميكياً -->
+        </ul>
+    </div>
+    
+    <!-- المحتوى الرئيسي -->
+    <div class="container" id="container">
+        <div class="chapter-header">
+            <h1 class="chapter-title" id="currentChapterTitle">الفصل 1: البداية</h1>
+            <p class="chapter-subtitle" id="currentChapterSubtitle">ناروتو - مانغا النينجا</p>
+        </div>
+        
+        <!-- صفحات المانغا -->
+        <div id="mangaPages">
+            <!-- سيتم إنشاء الصور ديناميكياً -->
+        </div>
+    </div>
+    
+    <!-- أزرار التنقل -->
+    <div class="nav-buttons">
+        <button class="nav-btn" id="prevChapter" title="الفصل السابق">
+            <i class="fas fa-chevron-right"></i>
+        </button>
+        <button class="nav-btn" id="nextChapter" title="الفصل التالي">
+            <i class="fas fa-chevron-left"></i>
+        </button>
+    </div>
+    
+    <!-- زر العودة للأعلى -->
+    <button class="to-top" id="toTop" title="العودة للأعلى">
+        <i class="fas fa-chevron-up"></i>
+    </button>
+    
+    <!-- شريط التقدم -->
+    <div class="progress-container">
+        <div class="progress-info">
+            <div class="progress-text">الفصل: <span id="currentChapter">1</span> من <span id="totalChapters">10</span></div>
+            <div class="progress-text">التقدم: <span id="progressPercent">0%</span></div>
+        </div>
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+    </div>
 
-<div class="book-scroll" id="book">
-  <section class="page">
-    <img style="position:relative;height: 100%;width:100%;margin-top: 0;" src="img//MangaProduct.jpg" alt="">
-  </section>
-  <section class="page">
-    المقدمة:
-
-"على مدار عشر سنواتٍ من تأسيسها، ازدهرت مملكة فالورين في هدوءٍ لم يكد يُنغِّصه أي تهديدٍ بالانهيار أو الدمار، حيث نعم شعبها بالسلام والأمان تحت حكم ملكٍ عادل. لكن كل شيءٍ تغير عندما **مات الحاكم فجأة**، ليُفجِّر صدمةً تهز أركان المملكة، وتُشعل خلافاتٍ عنيفةً حول من سيخلف العرش.
-
-كان أورين هو الوريث الشرعي، لكنه خالف شروط العائلة المالكة، فجُرِّد من حقه في الحكم، وقُتِل أبناؤه انتقامًا... إلا أن كاي**، الابن الأصغر، نجا **بمعجزة من المذبحة. والآن، بينما تختبئ المملكة تحت غيوم المؤامرات، هل سيتمكن كاي من **إثبات أحقيته بالعرش**؟ وما الثمن الذي سيدفعه مقابل استعادة ما سُلب منه؟"
-  </section>
-  <section class="page">
-البداية:
-في عالم من العوالم، كان هناك عالم يعاني من التفرقة والمعاناة والصراعات بين القبائل من أجل هدف واحد، وهو السيطرة على العالم من خلال توقيع عقود مع الملوك (المتحكم).في تلك الأحداث، ظهر رجل من مكان مجهول، لديه الحكمة والدهاء والقدرة على معالجة نفسه. قام هذا الرجل بتوحيد هذه القبائل ونشر السلام والوئام بإضافة قوانين صارمة لكل من في المملكة وكان يلقب هذا الرجل بإسم ريزل، ومن هنا بدأت مملكة فالورين المكونة من خمس مدن: الجنوبية (أوريندال)، الشمالية (فالوريا)، الشرقية (زيلثرا)، الغربية (أوريثال)، والوسطى (موريلاند).
-كانت المملكة تعيش في أفضل حالاتها، لكن لم تستمر هذه السعادة طويلًا.بسبب طمع بعض الناس بسلطا والقوة وبتحديد عقد (فالورين) الذي يمتلكه الملك ولذي يجعل من صاحب العقد القدرة على الشفاء لكن لكل قدرة وسلبياتها ان اصيب المالك بزهرة ليثرا الكرستالية فقد يموت في غضون اربع ساعات ولسوء الحظ وجد احد المغتالين الزهرة وقام باغتيال الملك ريزل ولم يستطع الملك ان يكتب وصيته ومات بعدها،فتولى الحكم بعده الأمير الأكبر(اورين). لكنه لم يكن يتوقع أن الكوارث ستزداد. حاول بشتى الوسائل أن يسيطر على استقرار المملكة. وفي تلك الأثناء، ولد فتى فريد من نوعه ذو بشرة فاتحة و بني غامق الشعر وعينين بنيتين وبعلامة اسفل عينه اليمنى يدعى كاي، كان ابن (اورين)الأكبر وكان عمره في تلك الحادثة 8سنوات. كان قد خالف إحدى قواعد عائلته بعد أن تزوج سرًا من امرأة من العامة لم يعلم احد بذالك السر عدى الملك. لكن لم يستمر هذا السر طويلًا، حتى علمت العائلة به، فنزعت الحكم منه وأمرت بقتل عشيرة زوجته وابنه لكن ابنه هرب باتجاه الجنوب محاولًا النجاة، وفي طريقه صادفته قافلة بضائع، فاختبأ في أحد الصناديق بمساعدة احد اصدقاء والده القدامى.</section>
-    <section class="page"></section>
-    <section class="page"></section>
-</div>
-
-<script>
-  const container = document.getElementById('book');
-  let isScrolling = false;
-
-  container.addEventListener('wheel', (e) => {
-    if (isScrolling) return;
-
-    e.preventDefault(); // يمنع التمرير الافتراضي السريع
-    isScrolling = true;
-
-    const direction = e.deltaY > 0 ? 1 : -1;
-    const scrollAmount = window.innerHeight;
-
-    container.scrollBy({
-      top: direction * scrollAmount,
-      behavior: 'smooth'
-    });
-
-    setTimeout(() => isScrolling = false, 700); // وقت التمرير
-  }, { passive: false });
-</script>
-
+    <script>
+        // بيانات الفصول والصور
+        const mangaData = {
+            chapters: [
+                {
+                    id: 1,
+                    title: "البداية",
+                    subtitle: "ناروتو - مانغا النينجا",
+                    pages: 10
+                },
+                {
+                    id: 2,
+                    title: "لقاء ساسوكي",
+                    subtitle: "ناروتو - مانغا النينجا",
+                    pages: 12
+                },
+                {
+                    id: 3,
+                    title: "فريق 7",
+                    subtitle: "ناروتو - مانغا النينجا",
+                    pages: 15
+                },
+                {
+                    id: 4,
+                    title: "المهمة الأولى",
+                    subtitle: "ناروتو - مانغا النينجا",
+                    pages: 14
+                },
+                {
+                    id: 5,
+                    title: "معركة جسر الأرض",
+                    subtitle: "ناروتو - مانغا النينجا",
+                    pages: 18
+                },
+                {
+                    id: 6,
+                    title: "امتحان التشونين",
+                    subtitle: "ناروتو - مانغا النينجا",
+                    pages: 20
+                },
+                {
+                    id: 7,
+                    title: "غابة الموت",
+                    subtitle: "ناروتو - مانغا النينجا",
+                    pages: 22
+                },
+                {
+                    id: 8,
+                    title: "معركة التصفيات",
+                    subtitle: "ناروتو - مانغا النينجا",
+                    pages: 25
+                },
+                {
+                    id: 9,
+                    title: "هجوم كونوها",
+                    subtitle: "ناروتو - مانغا النينجا",
+                    pages: 30
+                },
+                {
+                    id: 10,
+                    title: "بحث عن تسونادي",
+                    subtitle: "ناروتو - مانغا النينجا",
+                    pages: 28
+                }
+            ]
+        };
+        
+        // حالة التطبيق
+        let currentChapter = 1;
+        let currentPage = 1;
+        let totalPages = mangaData.chapters[0].pages;
+        
+        // عناصر DOM
+        const container = document.getElementById('container');
+        const mangaPages = document.getElementById('mangaPages');
+        const currentChapterTitle = document.getElementById('currentChapterTitle');
+        const currentChapterSubtitle = document.getElementById('currentChapterSubtitle');
+        const currentChapterElement = document.getElementById('currentChapter');
+        const totalChaptersElement = document.getElementById('totalChapters');
+        const progressFill = document.getElementById('progressFill');
+        const progressPercent = document.getElementById('progressPercent');
+        const chaptersBtn = document.getElementById('chaptersBtn');
+        const chaptersPanel = document.getElementById('chaptersPanel');
+        const chapterList = document.getElementById('chapterList');
+        const prevChapterBtn = document.getElementById('prevChapter');
+        const nextChapterBtn = document.getElementById('nextChapter');
+        const toTop = document.getElementById('toTop');
+        
+        // صور المانغا الوهمية (يمكن استبدالها بصور حقيقية)
+        const mangaImages = [
+            "https://images.unsplash.com/photo-1635805737707-575885ab0820?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80",
+            "https://images.unsplash.com/photo-1578662996442-48f60103fc96?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80",
+            "https://images.unsplash.com/photo-1639322537228-f710d846310a?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80",
+            "https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80",
+            "https://images.unsplash.com/photo-1544717305-2782549b5136?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80",
+            "https://images.unsplash.com/photo-1536148935331-408321065b18?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80",
+            "https://images.unsplash.com/photo-1518709268805-4e9042af2176?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80",
+            "https://images.unsplash.com/photo-1534423861386-85a16f5d13fd?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80",
+            "https://images.unsplash.com/photo-1511497584788-876760111969?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80",
+            "https://images.unsplash.com/photo-1541562232579-512a21360020?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80"
+        ];
+        
+        // تهيئة التطبيق
+        function initApp() {
+            // تعيين العدد الكلي للفصول
+            totalChaptersElement.textContent = mangaData.chapters.length;
+            
+            // إنشاء قائمة الفصول
+            renderChaptersList();
+            
+            // تحميل الفصل الأول
+            loadChapter(currentChapter);
+            
+            // إضافة مستمعي الأحداث
+            addEventListeners();
+            
+            // تحديث تقدم القراءة
+            updateReadingProgress();
+        }
+        
+        // إنشاء قائمة الفصول
+        function renderChaptersList() {
+            chapterList.innerHTML = '';
+            
+            mangaData.chapters.forEach(chapter => {
+                const chapterItem = document.createElement('li');
+                chapterItem.className = `chapter-item ${chapter.id === currentChapter ? 'active' : ''}`;
+                chapterItem.innerHTML = `
+                    <div class="chapter-item-number">الفصل ${chapter.id}</div>
+                    <div class="chapter-item-title">${chapter.title}</div>
+                    <div style="font-size: 0.8rem; color: #888; margin-top: 5px;">${chapter.pages} صفحة</div>
+                `;
+                
+                chapterItem.addEventListener('click', () => {
+                    loadChapter(chapter.id);
+                    chaptersPanel.classList.remove('active');
+                });
+                
+                chapterList.appendChild(chapterItem);
+            });
+        }
+        
+        // تحميل فصل معين
+        function loadChapter(chapterId) {
+            if (chapterId < 1 || chapterId > mangaData.chapters.length) return;
+            
+            currentChapter = chapterId;
+            currentPage = 1;
+            
+            const chapter = mangaData.chapters.find(c => c.id === chapterId);
+            if (!chapter) return;
+            
+            totalPages = chapter.pages;
+            
+            // تحديث العنوان
+            currentChapterTitle.textContent = `الفصل ${currentChapter}: ${chapter.title}`;
+            currentChapterSubtitle.textContent = chapter.subtitle;
+            currentChapterElement.textContent = currentChapter;
+            
+            // إنشاء صفحات المانغا
+            renderMangaPages();
+            
+            // تحديث واجهة المستخدم
+            updateUI();
+            
+            // التمرير إلى الأعلى
+            scrollToTop();
+        }
+        
+        // إنشاء صفحات المانغا
+        function renderMangaPages() {
+            mangaPages.innerHTML = '';
+            
+            // استخدام صور عشوائية من المصفوفة
+            for (let i = 1; i <= totalPages; i++) {
+                const page = document.createElement('div');
+                page.className = 'manga-page';
+                page.id = `page-${i}`;
+                
+                // اختيار صورة عشوائية (يمكن استبدالها بصور حقيقية)
+                const randomImage = mangaImages[Math.floor(Math.random() * mangaImages.length)];
+                
+                page.innerHTML = `
+                    <img src="${randomImage}" alt="صفحة ${i} من المانغا" loading="lazy">
+                    <div class="page-number">صفحة ${i}</div>
+                `;
+                
+                mangaPages.appendChild(page);
+            }
+            
+            // إضافة تأثير ظهور الصور عند التمرير
+            observePages();
+        }
+        
+        // تحديث واجهة المستخدم
+        function updateUI() {
+            // تحديث قائمة الفصول
+            document.querySelectorAll('.chapter-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            const activeChapterItem = document.querySelector(`.chapter-item:nth-child(${currentChapter})`);
+            if (activeChapterItem) {
+                activeChapterItem.classList.add('active');
+            }
+            
+            // تحديث حالة أزرار التنقل
+            prevChapterBtn.disabled = currentChapter <= 1;
+            nextChapterBtn.disabled = currentChapter >= mangaData.chapters.length;
+            
+            // تحديث شريط التقدم
+            updateProgressBar();
+        }
+        
+        // تحديث شريط التقدم
+        function updateProgressBar() {
+            const scrollTop = window.scrollY;
+            const scrollHeight = document.documentElement.scrollHeight - window.innerHeight;
+            const scrollPercent = scrollHeight > 0 ? Math.min(100, Math.round((scrollTop / scrollHeight) * 100)) : 0;
+            
+            progressFill.style.width = `${scrollPercent}%`;
+            progressPercent.textContent = `${scrollPercent}%`;
+        }
+        
+        // التمرير إلى أعلى الصفحة
+        function scrollToTop() {
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        }
+        
+        // مراقبة ظهور الصور
+        function observePages() {
+            const pages = document.querySelectorAll('.manga-page');
+            
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('visible');
+                        // تحديث الصفحة الحالية بناءً على الصفحة الظاهرة
+                        const pageId = entry.target.id;
+                        const pageNum = parseInt(pageId.split('-')[1]);
+                        currentPage = pageNum;
+                    }
+                });
+            }, {
+                threshold: 0.1
+            });
+            
+            pages.forEach(page => {
+                observer.observe(page);
+            });
+        }
+        
+        // إضافة مستمعي الأحداث
+        function addEventListeners() {
+            // فتح/إغلاق قائمة الفصول
+            chaptersBtn.addEventListener('click', () => {
+                chaptersPanel.classList.toggle('active');
+            });
+            
+            // إغلاق قائمة الفصول بالنقر خارجها
+            document.addEventListener('click', (event) => {
+                if (!chaptersPanel.contains(event.target) && !chaptersBtn.contains(event.target)) {
+                    chaptersPanel.classList.remove('active');
+                }
+            });
+            
+            // التنقل بين الفصول
+            prevChapterBtn.addEventListener('click', () => {
+                if (currentChapter > 1) {
+                    loadChapter(currentChapter - 1);
+                }
+            });
+            
+            nextChapterBtn.addEventListener('click', () => {
+                if (currentChapter < mangaData.chapters.length) {
+                    loadChapter(currentChapter + 1);
+                }
+            });
+            
+            // تحديث تقدم القراءة أثناء التمرير
+            window.addEventListener('scroll', () => {
+                updateProgressBar();
+                
+                // إظهار/إخفاء زر العودة للأعلى
+                if (window.scrollY > 500) {
+                    toTop.classList.add('show');
+                } else {
+                    toTop.classList.remove('show');
+                }
+            });
+            
+            // زر العودة للأعلى
+            toTop.addEventListener('click', scrollToTop);
+            
+            // اختصارات لوحة المفاتيح
+            document.addEventListener('keydown', (event) => {
+                // مفتاح السهم الأيسر للفصل السابق
+                if (event.key === 'ArrowRight') {
+                    event.preventDefault();
+                    if (currentChapter > 1) {
+                        loadChapter(currentChapter - 1);
+                    }
+                }
+                
+                // مفتاح السهم الأيمن للفصل التالي
+                if (event.key === 'ArrowLeft') {
+                    event.preventDefault();
+                    if (currentChapter < mangaData.chapters.length) {
+                        loadChapter(currentChapter + 1);
+                    }
+                }
+                
+                // مفتاح المسافة للتمرير السريع
+                if (event.key === ' ' && !event.target.matches('button, input, textarea')) {
+                    event.preventDefault();
+                    window.scrollBy(0, window.innerHeight * 0.8);
+                }
+                
+                // مفتاح ESC لإغلاق قائمة الفصول
+                if (event.key === 'Escape') {
+                    chaptersPanel.classList.remove('active');
+                }
+            });
+            
+            // تحميل الصور عند الظهور
+            const images = document.querySelectorAll('img');
+            images.forEach(img => {
+                img.addEventListener('load', () => {
+                    img.parentElement.classList.add('loaded');
+                });
+            });
+        }
+        
+        // تهيئة التطبيق عند تحميل الصفحة
+        document.addEventListener('DOMContentLoaded', initApp);
+    </script>
 </body>
 </html>
